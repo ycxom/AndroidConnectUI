@@ -66,9 +66,10 @@ namespace AndroidConnectUI
                     var tempTask = GetPhoneTemperatureAsync();
                     var resTask = GetPhoneResolutionAsync();
                     var densityTask = GetPhoneDensityAsync();
+                    var batteryTask = GetPhoneBatteryAsync();
                     var procTask = GetPhoneProcessesAsync();
 
-                    await Task.WhenAll(cpuTask, gpuTask, ramTask, tempTask, resTask, densityTask, procTask);
+                    await Task.WhenAll(cpuTask, gpuTask, ramTask, tempTask, resTask, densityTask, batteryTask, procTask);
 
                     Dispatcher.Invoke(() =>
                     {
@@ -87,6 +88,12 @@ namespace AndroidConnectUI
                         txtPhoneTemp.Text = tempTask.Result;
                         txtResolution.Text = resTask.Result;
                         txtDensity.Text = densityTask.Result;
+
+                        var (level, status, power, temp) = batteryTask.Result;
+                        txtBatteryLevel.Text = level;
+                        txtBatteryStatus.Text = status;
+                        txtChargePower.Text = power;
+                        txtBatteryTemp.Text = temp;
                     });
                 }
                 else
@@ -102,6 +109,10 @@ namespace AndroidConnectUI
                         txtPhoneTemp.Text = "--°C";
                         txtResolution.Text = "--";
                         txtDensity.Text = "--";
+                        txtBatteryLevel.Text = "--%";
+                        txtBatteryStatus.Text = "--";
+                        txtChargePower.Text = "--";
+                        txtBatteryTemp.Text = "--°C";
                     });
                 }
             }
@@ -324,6 +335,71 @@ namespace AndroidConnectUI
                 Debug.WriteLine($"获取 DPI 失败: {ex.Message}");
             }
             return "--";
+        }
+
+        private async Task<(string level, string status, string power, string temp)> GetPhoneBatteryAsync()
+        {
+            try
+            {
+                var (output, _) = await RunAdbAsync("shell dumpsys battery");
+                if (string.IsNullOrEmpty(output)) return ("--%", "--", "--", "--°C");
+
+                string level = "--%";
+                string status = "--";
+                string power = "--";
+                string temp = "--°C";
+
+                var lines = output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    var trimmed = line.Trim();
+                    if (trimmed.StartsWith("level:"))
+                    {
+                        var val = trimmed.Substring("level:".Length).Trim();
+                        level = $"{val}%";
+                    }
+                    else if (trimmed.StartsWith("status:"))
+                    {
+                        var val = trimmed.Substring("status:".Length).Trim();
+                        status = val switch
+                        {
+                            "1" => "未知",
+                            "2" => "充电中",
+                            "3" => "放电中",
+                            "4" => "未充电",
+                            "5" => "已充满",
+                            _ => val
+                        };
+                    }
+                    else if (trimmed.StartsWith("temperature:"))
+                    {
+                        var val = trimmed.Substring("temperature:".Length).Trim();
+                        if (int.TryParse(val, out int t))
+                        {
+                            temp = $"{t / 10.0:F1}°C";
+                        }
+                    }
+                }
+
+                var (currentOutput, _) = await RunAdbAsync("shell cat /sys/class/power_supply/battery/current_now 2>/dev/null");
+                var (voltageOutput, _) = await RunAdbAsync("shell cat /sys/class/power_supply/battery/voltage_now 2>/dev/null");
+
+                if (long.TryParse(currentOutput?.Trim(), out long current) &&
+                    long.TryParse(voltageOutput?.Trim(), out long voltage))
+                {
+                    double currentA = Math.Abs(current) / 1000000.0;
+                    double voltageV = voltage / 1000000.0;
+                    double watt = currentA * voltageV;
+                    power = $"{watt:F2} W";
+                }
+
+                return (level, status, power, temp);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"获取电量失败: {ex.Message}");
+            }
+            return ("--%", "--", "--", "--°C");
         }
 
         private async Task<List<ProcessInfo>> GetPhoneProcessesAsync()

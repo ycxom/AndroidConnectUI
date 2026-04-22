@@ -7,8 +7,8 @@
         mc:Ignorable="d"
         Style="{StaticResource ModernWindow}"
         Title="Android Connect"
-        Height="892"
-        Width="1062"
+        Height="932"
+        Width="1047"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanMinimize"
         AllowsTransparency="True"
@@ -228,6 +228,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
@@ -307,8 +308,80 @@
                         </Grid>
                     </Border>
 
-                    <!-- 应用列表卡片 -->
+                    <!-- 电量信息卡片 -->
                     <Border Grid.Row="2" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 电量状态 -->
+                            <Grid Grid.Row="0" Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="&#xE83F;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="16" Foreground="{StaticResource SuccessBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="电量" Style="{StaticResource MetricLabel}"/>
+                                    <TextBlock x:Name="txtBatteryLevel" Text="--%"
+                                               FontSize="16" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+
+                                <TextBlock Grid.Column="2" Text="&#xE945;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="16" Foreground="{StaticResource PrimaryBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                    <TextBlock Text="充电状态" Style="{StaticResource MetricLabel}"/>
+                                    <TextBlock x:Name="txtBatteryStatus" Text="--"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Grid.Row="1" Background="{StaticResource DividerBrush}" Height="1" Margin="0,0,0,16"/>
+
+                            <!-- 充电功率 -->
+                            <Grid Grid.Row="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="&#xE945;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="16" Foreground="{StaticResource WarningBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="充电功率" Style="{StaticResource MetricLabel}"/>
+                                    <TextBlock x:Name="txtChargePower" Text="--"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+
+                                <TextBlock Grid.Column="2" Text="&#xE945;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="16" Foreground="{StaticResource CpuBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                    <TextBlock Text="电池温度" Style="{StaticResource MetricLabel}"/>
+                                    <TextBlock x:Name="txtBatteryTemp" Text="--°C"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <!-- 应用列表卡片 -->
+                    <Border Grid.Row="3" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -389,7 +462,7 @@
                     </Border>
 
                     <!-- 物理按键卡片 -->
-                    <Border Grid.Row="3" Style="{StaticResource CardPanel}">
+                    <Border Grid.Row="4" Style="{StaticResource CardPanel}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
