@@ -1,0 +1,33 @@
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.sln.docstates
+
+# Build output
+bin/
+obj/
+Publish/
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# OS generated files
+Thumbs.db
+.DS_Store
+
+# Batch file generated files
+original_size.txt
+original_density.txt
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
