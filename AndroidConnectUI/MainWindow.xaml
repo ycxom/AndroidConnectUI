@@ -1,0 +1,354 @@
+<Window x:Class="AndroidConnectUI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:AndroidConnectUI"
+        mc:Ignorable="d"
+        Style="{StaticResource ModernWindow}"
+        Title="Android Connect"
+        Height="720"
+        Width="960"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanMinimize"
+        AllowsTransparency="True"
+        WindowStyle="None"
+        Background="Transparent">
+
+    <Border x:Name="WindowBorder"
+            Background="{StaticResource BackgroundBrush}"
+            CornerRadius="16"
+            BorderBrush="{StaticResource CardBorderBrush}"
+            BorderThickness="1"
+            Margin="8">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="30" ShadowDepth="0" Opacity="0.5" Color="#000000"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="52"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 自定义标题栏 -->
+            <Grid Grid.Row="0" Margin="0" Background="Transparent"
+                  MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" Margin="20,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE916;" FontFamily="Segoe MDL2 Assets" FontSize="18"
+                               Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="Android Connect" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="OCR" FontSize="11" FontWeight="Normal"
+                               Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center"
+                               Margin="8,0,0,0" Opacity="0.8"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,8,0">
+                    <Button x:Name="btnMinimize" Content="&#xE921;" Click="btnMinimize_Click"
+                            FontFamily="Segoe MDL2 Assets" FontSize="12"
+                            Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
+                            BorderThickness="0" Width="40" Height="32"
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                            Cursor="Hand"/>
+                    <Button x:Name="btnClose" Content="&#xE711;" Click="btnClose_Click"
+                            FontFamily="Segoe MDL2 Assets" FontSize="12"
+                            Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
+                            BorderThickness="0" Width="40" Height="32"
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                            Cursor="Hand"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- 操作按钮区域 -->
+            <Grid Grid.Row="1" Margin="24,8,24,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 启动连接按钮 -->
+                <Button x:Name="btnStart" Grid.Column="0" Style="{StaticResource SuccessButton}"
+                        Click="btnStart_Click" Height="52">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE912;" FontFamily="Segoe MDL2 Assets" FontSize="18"
+                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock Text="启动连接" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- 恢复分辨率按钮 -->
+                <Button x:Name="btnRestore" Grid.Column="2" Style="{StaticResource InfoButton}"
+                        Click="btnRestore_Click" Height="52">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="18"
+                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock Text="恢复分辨率" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- 刷新按钮 -->
+                <Button x:Name="btnRefresh" Grid.Column="4" Style="{StaticResource PrimaryButton}"
+                        Click="btnRefresh_Click" Height="52">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="18"
+                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock Text="刷新状态" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <!-- 主内容区域 -->
+            <Grid Grid.Row="2" Margin="24,0,24,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 左侧：系统资源监控 -->
+                <Grid Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="&#xE950;  系统资源" Style="{StaticResource SectionTitle}"/>
+
+                    <!-- CPU 卡片 -->
+                    <Border Grid.Row="1" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Grid.Row="0">
+                                <TextBlock Text="&#xE950;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                           Foreground="{StaticResource CpuBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="CPU" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <TextBlock x:Name="txtCPU" Grid.Row="1" Text="0%"
+                                       Style="{StaticResource MetricValue}"
+                                       Foreground="{StaticResource CpuBrush}" Margin="0,8,0,8"/>
+
+                            <ProgressBar x:Name="pbCPU" Grid.Row="2"
+                                         Style="{StaticResource ModernProgressBar}"
+                                         Foreground="{StaticResource CpuBrush}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- GPU 卡片 -->
+                    <Border Grid.Row="2" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Grid.Row="0">
+                                <TextBlock Text="&#xE950;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                           Foreground="{StaticResource GpuBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="GPU" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <TextBlock x:Name="txtGPU" Grid.Row="1" Text="0%"
+                                       Style="{StaticResource MetricValue}"
+                                       Foreground="{StaticResource GpuBrush}" Margin="0,8,0,8"/>
+
+                            <ProgressBar x:Name="pbGPU" Grid.Row="2"
+                                         Style="{StaticResource ModernProgressBar}"
+                                         Foreground="{StaticResource GpuBrush}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- RAM 卡片 -->
+                    <Border Grid.Row="3" Style="{StaticResource CardPanel}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Grid.Row="0">
+                                <TextBlock Text="&#xE950;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                           Foreground="{StaticResource RamBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="RAM" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <TextBlock x:Name="txtRAM" Grid.Row="1" Text="0%"
+                                       Style="{StaticResource MetricValue}"
+                                       Foreground="{StaticResource RamBrush}" Margin="0,8,0,8"/>
+
+                            <ProgressBar x:Name="pbRAM" Grid.Row="2"
+                                         Style="{StaticResource ModernProgressBar}"
+                                         Foreground="{StaticResource RamBrush}"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- 右侧：手机信息 -->
+                <Grid Grid.Column="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="&#xE8E4;  设备信息" Style="{StaticResource SectionTitle}"/>
+
+                    <!-- 设备状态卡片 -->
+                    <Border Grid.Row="1" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 设备连接状态 -->
+                            <Grid Grid.Row="0" Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Ellipse x:Name="statusDot" Grid.Column="0"
+                                         Style="{StaticResource StatusDot}"
+                                         Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="设备状态" Style="{StaticResource MetricLabel}"/>
+                                    <TextBlock x:Name="txtDeviceStatus" Text="未连接"
+                                               FontSize="16" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+
+                                <TextBlock Grid.Column="2" Text="&#xE2A4;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="16" Foreground="{StaticResource WarningBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                    <TextBlock Text="设备温度" Style="{StaticResource MetricLabel}"/>
+                                    <TextBlock x:Name="txtPhoneTemp" Text="--°C"
+                                               FontSize="16" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Grid.Row="1" Background="{StaticResource DividerBrush}" Height="1" Margin="0,0,0,16"/>
+
+                            <!-- 分辨率信息 -->
+                            <Grid Grid.Row="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="&#xE799;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="16" Foreground="{StaticResource PrimaryBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="屏幕分辨率" Style="{StaticResource MetricLabel}"/>
+                                    <TextBlock x:Name="txtResolution" Text="--"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+
+                                <TextBlock Grid.Column="2" Text="&#xE799;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="16" Foreground="{StaticResource InfoBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                    <TextBlock Text="DPI 密度" Style="{StaticResource MetricLabel}"/>
+                                    <TextBlock x:Name="txtDensity" Text="--"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <!-- 进程信息卡片 -->
+                    <Border Grid.Row="2" Style="{StaticResource CardPanel}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,12">
+                                <TextBlock Text="&#xE8FD;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                           Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="进程信息" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="txtProcessCount" Text="(0)"
+                                           FontSize="12" Foreground="{StaticResource TextHintBrush}"
+                                           VerticalAlignment="Center" Margin="6,0,0,0"/>
+                            </StackPanel>
+
+                            <ListView x:Name="lvProcesses" Grid.Row="1"
+                                      Style="{StaticResource ModernListView}">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="进程名" Width="160"
+                                                        DisplayMemberBinding="{Binding Name}"
+                                                        HeaderContainerStyle="{StaticResource ModernGridViewColumnHeader}"/>
+                                        <GridViewColumn Header="PID" Width="70"
+                                                        DisplayMemberBinding="{Binding PID}"
+                                                        HeaderContainerStyle="{StaticResource ModernGridViewColumnHeader}"/>
+                                        <GridViewColumn Header="内存 (KB)" Width="100"
+                                                        DisplayMemberBinding="{Binding Memory}"
+                                                        HeaderContainerStyle="{StaticResource ModernGridViewColumnHeader}"/>
+                                    </GridView>
+                                </ListView.View>
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                        <Setter Property="Padding" Value="4,6"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListViewItem">
+                                                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                                            Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                                                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#252545"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#303060"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                            </ListView>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
