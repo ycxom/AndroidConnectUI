@@ -7,8 +7,8 @@
         mc:Ignorable="d"
         Style="{StaticResource ModernWindow}"
         Title="Android Connect"
-        Height="720"
-        Width="960"
+        Height="892"
+        Width="1062"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanMinimize"
         AllowsTransparency="True"
@@ -51,6 +51,12 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,8,0">
+                    <Button x:Name="btnSettings" Content="&#xE713;" Click="btnSettings_Click"
+                            FontFamily="Segoe MDL2 Assets" FontSize="12"
+                            Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
+                            BorderThickness="0" Width="40" Height="32"
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                            Cursor="Hand" ToolTip="设置"/>
                     <Button x:Name="btnMinimize" Content="&#xE921;" Click="btnMinimize_Click"
                             FontFamily="Segoe MDL2 Assets" FontSize="12"
                             Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
@@ -108,13 +114,13 @@
                     </StackPanel>
                 </Button>
 
-                <!-- 刷新按钮 -->
-                <Button x:Name="btnRefresh" Grid.Column="6" Style="{StaticResource PrimaryButton}"
-                        Click="btnRefresh_Click" Height="52">
+                <!-- 无线ADB按钮 -->
+                <Button x:Name="btnWirelessAdb" Grid.Column="6" Style="{StaticResource PrimaryButton}"
+                        Click="btnWirelessAdb_Click" Height="52">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="18"
+                        <TextBlock Text="&#xE701;" FontFamily="Segoe MDL2 Assets" FontSize="18"
                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
-                        <TextBlock Text="刷新状态" VerticalAlignment="Center"/>
+                        <TextBlock Text="无线ADB" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
             </Grid>
@@ -144,7 +150,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="80"/>
                             </Grid.RowDefinitions>
 
                             <StackPanel Orientation="Horizontal" Grid.Row="0">
@@ -155,11 +161,12 @@
 
                             <TextBlock x:Name="txtCPU" Grid.Row="1" Text="0%"
                                        Style="{StaticResource MetricValue}"
-                                       Foreground="{StaticResource CpuBrush}" Margin="0,8,0,8"/>
+                                       Foreground="{StaticResource CpuBrush}" Margin="0,4,0,4"/>
 
-                            <ProgressBar x:Name="pbCPU" Grid.Row="2"
-                                         Style="{StaticResource ModernProgressBar}"
-                                         Foreground="{StaticResource CpuBrush}"/>
+                            <local:LineChartControl x:Name="chartCPU" Grid.Row="2"
+                                                    Stroke="{StaticResource CpuBrush}"
+                                                    Fill="#26FF6B6B"
+                                                    StrokeThickness="2"/>
                         </Grid>
                     </Border>
 
@@ -169,7 +176,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="80"/>
                             </Grid.RowDefinitions>
 
                             <StackPanel Orientation="Horizontal" Grid.Row="0">
@@ -180,11 +187,12 @@
 
                             <TextBlock x:Name="txtGPU" Grid.Row="1" Text="0%"
                                        Style="{StaticResource MetricValue}"
-                                       Foreground="{StaticResource GpuBrush}" Margin="0,8,0,8"/>
+                                       Foreground="{StaticResource GpuBrush}" Margin="0,4,0,4"/>
 
-                            <ProgressBar x:Name="pbGPU" Grid.Row="2"
-                                         Style="{StaticResource ModernProgressBar}"
-                                         Foreground="{StaticResource GpuBrush}"/>
+                            <local:LineChartControl x:Name="chartGPU" Grid.Row="2"
+                                                    Stroke="{StaticResource GpuBrush}"
+                                                    Fill="#26A78BFA"
+                                                    StrokeThickness="2"/>
                         </Grid>
                     </Border>
 
@@ -194,7 +202,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="80"/>
                             </Grid.RowDefinitions>
 
                             <StackPanel Orientation="Horizontal" Grid.Row="0">
@@ -205,11 +213,12 @@
 
                             <TextBlock x:Name="txtRAM" Grid.Row="1" Text="0%"
                                        Style="{StaticResource MetricValue}"
-                                       Foreground="{StaticResource RamBrush}" Margin="0,8,0,8"/>
+                                       Foreground="{StaticResource RamBrush}" Margin="0,4,0,4"/>
 
-                            <ProgressBar x:Name="pbRAM" Grid.Row="2"
-                                         Style="{StaticResource ModernProgressBar}"
-                                         Foreground="{StaticResource RamBrush}"/>
+                            <local:LineChartControl x:Name="chartRAM" Grid.Row="2"
+                                                    Stroke="{StaticResource RamBrush}"
+                                                    Fill="#2638BDF8"
+                                                    StrokeThickness="2"/>
                         </Grid>
                     </Border>
                 </Grid>
@@ -220,6 +229,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Text="&#xE8E4;  设备信息" Style="{StaticResource SectionTitle}"/>
@@ -298,7 +308,7 @@
                     </Border>
 
                     <!-- 应用列表卡片 -->
-                    <Border Grid.Row="2" Style="{StaticResource CardPanel}">
+                    <Border Grid.Row="2" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -375,6 +385,142 @@
                                     </Style>
                                 </ListView.ItemContainerStyle>
                             </ListView>
+                        </Grid>
+                    </Border>
+
+                    <!-- 物理按键卡片 -->
+                    <Border Grid.Row="3" Style="{StaticResource CardPanel}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,12">
+                                <TextBlock Text="&#xE961;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                           Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="物理按键" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button x:Name="btnKeyPower" Content="&#xE7E8;" 
+                                        FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                        Background="{StaticResource CardBackgroundBrush}" 
+                                        Foreground="{StaticResource TextPrimaryBrush}"
+                                        BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                                        Width="56" Height="40" Margin="0,0,8,0"
+                                        Click="btnKeyPower_Click" Cursor="Hand"
+                                        ToolTip="电源键">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                                CornerRadius="8">
+                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Background" Value="#252545"/>
+                                                                <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsPressed" Value="True">
+                                                                <Setter Property="Background" Value="#303060"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button x:Name="btnKeyVolDown" Content="&#xE929;" 
+                                        FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                        Background="{StaticResource CardBackgroundBrush}" 
+                                        Foreground="{StaticResource TextPrimaryBrush}"
+                                        BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                                        Width="56" Height="40" Margin="0,0,8,0"
+                                        Click="btnKeyVolDown_Click" Cursor="Hand"
+                                        ToolTip="音量减">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                                CornerRadius="8">
+                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Background" Value="#252545"/>
+                                                                <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsPressed" Value="True">
+                                                                <Setter Property="Background" Value="#303060"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button x:Name="btnKeyVolUp" Content="&#xE92A;" 
+                                        FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                        Background="{StaticResource CardBackgroundBrush}" 
+                                        Foreground="{StaticResource TextPrimaryBrush}"
+                                        BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                                        Width="56" Height="40"
+                                        Click="btnKeyVolUp_Click" Cursor="Hand"
+                                        ToolTip="音量加">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                                CornerRadius="8">
+                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Background" Value="#252545"/>
+                                                                <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsPressed" Value="True">
+                                                                <Setter Property="Background" Value="#303060"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
                         </Grid>
                     </Border>
                 </Grid>

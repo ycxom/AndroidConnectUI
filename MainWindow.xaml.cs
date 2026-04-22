@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -72,15 +73,15 @@ namespace AndroidConnectUI
                     Dispatcher.Invoke(() =>
                     {
                         var (cpuVal, cpuText) = cpuTask.Result;
-                        pbCPU.Value = cpuVal;
+                        chartCPU.AddDataPoint(cpuVal);
                         txtCPU.Text = cpuText;
 
                         var (gpuVal, gpuText) = gpuTask.Result;
-                        pbGPU.Value = gpuVal;
+                        chartGPU.AddDataPoint(gpuVal);
                         txtGPU.Text = gpuText;
 
                         var (ramVal, ramText) = ramTask.Result;
-                        pbRAM.Value = ramVal;
+                        chartRAM.AddDataPoint(ramVal);
                         txtRAM.Text = ramText;
 
                         txtPhoneTemp.Text = tempTask.Result;
@@ -92,9 +93,12 @@ namespace AndroidConnectUI
                 {
                     Dispatcher.Invoke(() =>
                     {
-                        pbCPU.Value = 0; txtCPU.Text = "--%";
-                        pbGPU.Value = 0; txtGPU.Text = "--%";
-                        pbRAM.Value = 0; txtRAM.Text = "--%";
+                        chartCPU.AddDataPoint(0);
+                        txtCPU.Text = "--%";
+                        chartGPU.AddDataPoint(0);
+                        txtGPU.Text = "--%";
+                        chartRAM.AddDataPoint(0);
+                        txtRAM.Text = "--%";
                         txtPhoneTemp.Text = "--°C";
                         txtResolution.Text = "--";
                         txtDensity.Text = "--";
@@ -290,19 +294,35 @@ namespace AndroidConnectUI
             try
             {
                 var (output, _) = await RunAdbAsync("shell wm density");
+                Debug.WriteLine($"DPI 原始输出: {output}");
+                
                 if (!string.IsNullOrEmpty(output))
                 {
-                    var idx = output.IndexOf("Physical density:");
-                    if (idx >= 0)
+                    var overrideIdx = output.IndexOf("Override density:");
+                    if (overrideIdx >= 0)
                     {
-                        var sub = output.Substring(idx + "Physical density:".Length).Trim();
+                        var sub = output.Substring(overrideIdx + "Override density:".Length).Trim();
                         var nl = sub.IndexOf('\n');
                         if (nl >= 0) sub = sub.Substring(0, nl).Trim();
+                        Debug.WriteLine($"DPI (Override): {sub}");
+                        return sub + " dpi";
+                    }
+                    
+                    var physicalIdx = output.IndexOf("Physical density:");
+                    if (physicalIdx >= 0)
+                    {
+                        var sub = output.Substring(physicalIdx + "Physical density:".Length).Trim();
+                        var nl = sub.IndexOf('\n');
+                        if (nl >= 0) sub = sub.Substring(0, nl).Trim();
+                        Debug.WriteLine($"DPI (Physical): {sub}");
                         return sub + " dpi";
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"获取 DPI 失败: {ex.Message}");
+            }
             return "--";
         }
 
@@ -431,23 +451,90 @@ namespace AndroidConnectUI
             Application.Current.Shutdown();
         }
 
-        private async void btnRefresh_Click(object sender, RoutedEventArgs e)
+        private void btnSettings_Click(object sender, RoutedEventArgs e)
         {
-            Debug.WriteLine("刷新按钮被点击");
-            btnRefresh.IsEnabled = false;
+            var settingsWindow = new SettingsWindow();
+            settingsWindow.Owner = this;
+            settingsWindow.ShowDialog();
+        }
+
+        private async void btnWirelessAdb_Click(object sender, RoutedEventArgs e)
+        {
+            Debug.WriteLine("无线ADB按钮被点击");
+            btnWirelessAdb.IsEnabled = false;
+
             try
             {
-                await RefreshAllAsync();
+                var connected = await IsDeviceConnectedAsync();
+                if (!connected)
+                {
+                    MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
+                        "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    btnWirelessAdb.IsEnabled = true;
+                    return;
+                }
+
+                var (output, error) = await RunAdbAsync("shell tcpip 5555");
+                Debug.WriteLine($"无线ADB输出: {output}");
+                Debug.WriteLine($"无线ADB错误: {error}");
+
+                if (!string.IsNullOrEmpty(error) && !error.Contains("Warning"))
+                {
+                    MessageBox.Show($"启动无线ADB失败: {error}", "错误",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                else
+                {
+                    MessageBox.Show("无线ADB已启动，端口: 5555\n请使用 adb connect <设备IP>:5555 连接",
+                        "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"刷新失败: {ex.Message}");
-                MessageBox.Show($"刷新失败: {ex.Message}", "错误",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                Debug.WriteLine($"无线ADB失败: {ex.Message}");
+                MessageBox.Show($"无线ADB失败: {ex.Message}",
+                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
-                btnRefresh.IsEnabled = true;
+                btnWirelessAdb.IsEnabled = true;
+            }
+        }
+
+        private async void btnKeyPower_Click(object sender, RoutedEventArgs e)
+        {
+            await SendKeyEvent("26");
+        }
+
+        private async void btnKeyVolUp_Click(object sender, RoutedEventArgs e)
+        {
+            await SendKeyEvent("24");
+        }
+
+        private async void btnKeyVolDown_Click(object sender, RoutedEventArgs e)
+        {
+            await SendKeyEvent("25");
+        }
+
+        private async Task SendKeyEvent(string keyCode)
+        {
+            try
+            {
+                var connected = await IsDeviceConnectedAsync();
+                if (!connected)
+                {
+                    MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
+                        "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                await RunAdbAsync($"shell input keyevent {keyCode}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"发送按键事件失败: {ex.Message}");
+                MessageBox.Show($"发送按键事件失败: {ex.Message}",
+                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -573,7 +660,17 @@ namespace AndroidConnectUI
                 if (inputDialog.ShowDialog() == true)
                 {
                     string resolution = inputDialog.Resolution;
-                    if (!string.IsNullOrWhiteSpace(resolution))
+                    string density = inputDialog.Density;
+                    bool hasResolution = !string.IsNullOrWhiteSpace(resolution);
+                    bool hasDensity = !string.IsNullOrWhiteSpace(density);
+
+                    if (!hasResolution && !hasDensity)
+                    {
+                        btnSetResolution.IsEnabled = true;
+                        return;
+                    }
+
+                    if (hasResolution)
                     {
                         Debug.WriteLine($"正在设置分辨率: {resolution}");
                         var (output, error) = await RunAdbAsync($"shell wm size {resolution}");
@@ -581,20 +678,46 @@ namespace AndroidConnectUI
                         {
                             MessageBox.Show($"设置分辨率失败: {error}", "错误",
                                 MessageBoxButton.OK, MessageBoxImage.Error);
-                        }
-                        else
-                        {
-                            await RefreshAllAsync();
-                            MessageBox.Show($"分辨率已设置为: {resolution}", "成功",
-                                MessageBoxButton.OK, MessageBoxImage.Information);
+                            btnSetResolution.IsEnabled = true;
+                            return;
                         }
                     }
+
+                    if (hasDensity)
+                    {
+                        Debug.WriteLine($"正在设置 DPI: {density}");
+                        var (output, error) = await RunAdbAsync($"shell wm density {density}");
+                        Debug.WriteLine($"DPI 设置输出: {output}");
+                        Debug.WriteLine($"DPI 设置错误: {error}");
+                        
+                        bool isRealError = !string.IsNullOrEmpty(error) && 
+                                          !error.Contains("Warning") && 
+                                          !error.Contains("WARNING");
+                        
+                        if (isRealError)
+                        {
+                            MessageBox.Show($"设置 DPI 失败: {error}", "错误",
+                                MessageBoxButton.OK, MessageBoxImage.Error);
+                            btnSetResolution.IsEnabled = true;
+                            return;
+                        }
+                    }
+
+                    await RefreshAllAsync();
+
+                    string message = "";
+                    if (hasResolution) message += $"分辨率已设置为: {resolution}";
+                    if (hasResolution && hasDensity) message += "\n";
+                    if (hasDensity) message += $"DPI 已设置为: {density}";
+
+                    MessageBox.Show(message, "成功",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"设置分辨率失败: {ex.Message}");
-                MessageBox.Show($"设置分辨率失败: {ex.Message}",
+                Debug.WriteLine($"设置失败: {ex.Message}");
+                MessageBox.Show($"设置失败: {ex.Message}",
                     "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
@@ -650,10 +773,21 @@ namespace AndroidConnectUI
                         return;
                     }
 
-                    var (_, error) = await RunAdbAsync($"shell monkey -p {app.PackageName} -c android.intent.category.LAUNCHER 1");
-                    if (!string.IsNullOrEmpty(error) && !error.Contains("No activities found"))
+                    var (output, error) = await RunAdbAsync($"shell monkey -p {app.PackageName} -c android.intent.category.LAUNCHER 1");
+                    Debug.WriteLine($"monkey 输出: {output}");
+                    Debug.WriteLine($"monkey 错误: {error}");
+                    
+                    bool isRealError = output.Contains("** ERROR") || 
+                                       output.Contains("IllegalArgument") ||
+                                       output.Contains("Exception") ||
+                                       output.Contains("No activities found");
+                    
+                    if (isRealError)
                     {
-                        MessageBox.Show($"启动应用失败: {error}", "错误",
+                        string errorMsg = output.Contains("No activities found") 
+                            ? "该应用没有可启动的 Activity" 
+                            : $"启动应用失败: {output}";
+                        MessageBox.Show(errorMsg, "错误",
                             MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
@@ -694,9 +828,11 @@ namespace AndroidConnectUI
                         string packageName = trimmed.Substring("package:".Length).Trim();
                         Debug.WriteLine($"找到包名: {packageName}");
                         
+                        string appName = await GetAppLabelAsync(packageName);
+                        
                         apps.Add(new AppInfo
                         {
-                            Name = packageName,
+                            Name = appName,
                             PackageName = packageName
                         });
                     }
@@ -707,6 +843,43 @@ namespace AndroidConnectUI
                 Debug.WriteLine($"获取应用列表失败: {ex.Message}");
             }
             return apps;
+        }
+
+        private async Task<string> GetAppLabelAsync(string packageName)
+        {
+            try
+            {
+                var (output, _) = await RunAdbAsync($"shell dumpsys package {packageName}");
+                if (string.IsNullOrEmpty(output)) return packageName;
+
+                var lines = output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                bool foundApplicationInfo = false;
+                
+                foreach (var line in lines)
+                {
+                    var trimmed = line.Trim();
+                    
+                    if (trimmed.StartsWith("ApplicationInfo"))
+                    {
+                        foundApplicationInfo = true;
+                    }
+                    
+                    if (foundApplicationInfo && trimmed.StartsWith("label="))
+                    {
+                        var label = trimmed.Substring("label=".Length).Trim();
+                        if (!string.IsNullOrEmpty(label))
+                        {
+                            Debug.WriteLine($"应用 {packageName} 名称: {label}");
+                            return label;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"获取 {packageName} 名称失败: {ex.Message}");
+            }
+            return packageName;
         }
     }
 
