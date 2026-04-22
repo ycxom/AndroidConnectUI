@@ -86,9 +86,6 @@ namespace AndroidConnectUI
                         txtPhoneTemp.Text = tempTask.Result;
                         txtResolution.Text = resTask.Result;
                         txtDensity.Text = densityTask.Result;
-                        var procs = procTask.Result;
-                        lvProcesses.ItemsSource = procs;
-                        txtProcessCount.Text = $"({procs.Count})";
                     });
                 }
                 else
@@ -101,8 +98,6 @@ namespace AndroidConnectUI
                         txtPhoneTemp.Text = "--°C";
                         txtResolution.Text = "--";
                         txtDensity.Text = "--";
-                        lvProcesses.ItemsSource = null;
-                        txtProcessCount.Text = "(0)";
                     });
                 }
             }
@@ -316,30 +311,49 @@ namespace AndroidConnectUI
             var processes = new List<ProcessInfo>();
             try
             {
-                var (output, _) = await RunAdbAsync("shell ps -A 2>/dev/null");
+                var (output, _) = await RunAdbAsync("shell ps -e 2>/dev/null");
                 if (string.IsNullOrWhiteSpace(output))
                 {
                     (output, _) = await RunAdbAsync("shell ps");
                 }
                 if (string.IsNullOrWhiteSpace(output)) return processes;
 
-                string[] lines = output.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                string[] lines = output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
                 if (lines.Length < 2) return processes;
 
-                string header = lines[0];
-                bool isModernFormat = header.Contains("PID") && header.Contains("NAME");
+                string header = lines[0].Trim();
+                bool hasPidColumn = header.Contains("PID");
+                bool hasNameColumn = header.Contains("NAME") || header.Contains("PROCESS");
+
+                int pidIndex = -1;
+                int nameIndex = -1;
+                int rssIndex = -1;
+
+                if (hasPidColumn && hasNameColumn)
+                {
+                    string[] headerParts = header.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    for (int i = 0; i < headerParts.Length; i++)
+                    {
+                        if (headerParts[i] == "PID") pidIndex = i;
+                        else if (headerParts[i] == "NAME" || headerParts[i] == "PROCESS") nameIndex = i;
+                        else if (headerParts[i] == "RSS") rssIndex = i;
+                    }
+                }
 
                 for (int i = 1; i < lines.Length && processes.Count < 20; i++)
                 {
-                    string[] parts = lines[i].Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    string line = lines[i].Trim();
+                    if (string.IsNullOrWhiteSpace(line)) continue;
 
-                    if (isModernFormat && parts.Length >= 9)
+                    string[] parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    if (pidIndex >= 0 && nameIndex >= 0 && parts.Length > Math.Max(pidIndex, nameIndex))
                     {
-                        string user = parts[0];
-                        string pid = parts[1];
-                        string rss = parts[5];
-                        string name = parts[8];
-                        if (user == "root" || user == "system" || user.StartsWith("u0_") || user.StartsWith("u10_"))
+                        string pid = parts[pidIndex];
+                        string name = parts[nameIndex];
+                        string rss = rssIndex >= 0 && parts.Length > rssIndex ? parts[rssIndex] : "0";
+
+                        if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(pid))
                         {
                             processes.Add(new ProcessInfo
                             {
@@ -349,18 +363,28 @@ namespace AndroidConnectUI
                             });
                         }
                     }
-                    else if (!isModernFormat && parts.Length >= 9)
+                    else if (parts.Length >= 9)
                     {
-                        processes.Add(new ProcessInfo
+                        string pid = parts[1];
+                        string rss = parts[5];
+                        string name = parts[parts.Length - 1];
+
+                        if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(pid))
                         {
-                            Name = parts[8],
-                            PID = parts[1],
-                            Memory = FormatSize(long.TryParse(parts[5], out long r) ? r * 1024 : 0)
-                        });
+                            processes.Add(new ProcessInfo
+                            {
+                                Name = name,
+                                PID = pid,
+                                Memory = FormatSize(long.TryParse(rss, out long r) ? r * 1024 : 0)
+                            });
+                        }
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"进程获取失败: {ex.Message}");
+            }
             return processes;
         }
 
@@ -409,10 +433,17 @@ namespace AndroidConnectUI
 
         private async void btnRefresh_Click(object sender, RoutedEventArgs e)
         {
+            Debug.WriteLine("刷新按钮被点击");
             btnRefresh.IsEnabled = false;
             try
             {
                 await RefreshAllAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"刷新失败: {ex.Message}");
+                MessageBox.Show($"刷新失败: {ex.Message}", "错误",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
@@ -420,50 +451,262 @@ namespace AndroidConnectUI
             }
         }
 
-        private void btnStart_Click(object sender, RoutedEventArgs e)
+        private async void btnStart_Click(object sender, RoutedEventArgs e)
         {
+            Debug.WriteLine("启动连接按钮被点击");
+            btnStart.IsEnabled = false;
+
             try
             {
-                string batPath = System.IO.Path.GetFullPath(
-                    System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "start.bat"));
-
-                var startInfo = new ProcessStartInfo
+                var connected = await IsDeviceConnectedAsync();
+                if (!connected)
                 {
-                    FileName = "cmd.exe",
-                    Arguments = $"/c \"{batPath}\"",
+                    MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
+                        "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    btnStart.IsEnabled = true;
+                    return;
+                }
+
+                Debug.WriteLine("正在设置 USB 链接不休眠...");
+                var (_, error1) = await RunAdbAsync("shell settings put global stay_on_while_plugged_in 3");
+                if (!string.IsNullOrEmpty(error1))
+                {
+                    Debug.WriteLine($"设置不休眠警告: {error1}");
+                }
+
+                Debug.WriteLine("正在启动 scrcpy 并关闭屏幕...");
+                var scrcpyStartInfo = new ProcessStartInfo
+                {
+                    FileName = "scrcpy",
+                    Arguments = "--turn-screen-off --stay-awake",
                     UseShellExecute = true,
                     CreateNoWindow = false
                 };
-                Process.Start(startInfo);
+                Process.Start(scrcpyStartInfo);
+
+                MessageBox.Show("已成功启动 scrcpy 并设置设备不休眠。", "成功",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"启动失败: {ex.Message}", "错误",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                Debug.WriteLine($"启动失败: {ex.Message}");
+                MessageBox.Show($"启动失败: {ex.Message}\n\n请确保已安装 scrcpy 并将其添加到系统 PATH 中。",
+                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                btnStart.IsEnabled = true;
             }
         }
 
-        private void btnRestore_Click(object sender, RoutedEventArgs e)
+        private async void btnRestore_Click(object sender, RoutedEventArgs e)
         {
+            Debug.WriteLine("恢复分辨率按钮被点击");
+            btnRestore.IsEnabled = false;
+
             try
             {
-                string batPath = System.IO.Path.GetFullPath(
-                    System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "restore.bat"));
-
-                var startInfo = new ProcessStartInfo
+                var connected = await IsDeviceConnectedAsync();
+                if (!connected)
                 {
-                    FileName = "cmd.exe",
-                    Arguments = $"/c \"{batPath}\"",
-                    UseShellExecute = true,
-                    CreateNoWindow = false
-                };
-                Process.Start(startInfo);
+                    MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
+                        "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    btnRestore.IsEnabled = true;
+                    return;
+                }
+
+                Debug.WriteLine("正在恢复分辨率...");
+                var (_, error1) = await RunAdbAsync("shell wm size reset");
+                if (!string.IsNullOrEmpty(error1))
+                {
+                    Debug.WriteLine($"恢复分辨率警告: {error1}");
+                }
+
+                Debug.WriteLine("正在恢复密度...");
+                var (_, error2) = await RunAdbAsync("shell wm density reset");
+                if (!string.IsNullOrEmpty(error2))
+                {
+                    Debug.WriteLine($"恢复密度警告: {error2}");
+                }
+
+                Debug.WriteLine("正在恢复休眠设置...");
+                var (_, error3) = await RunAdbAsync("shell settings put global stay_on_while_plugged_in 0");
+                if (!string.IsNullOrEmpty(error3))
+                {
+                    Debug.WriteLine($"恢复休眠设置警告: {error3}");
+                }
+
+                await RefreshAllAsync();
+
+                MessageBox.Show("已成功恢复设备默认设置。", "成功",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"恢复失败: {ex.Message}", "错误",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                Debug.WriteLine($"恢复失败: {ex.Message}");
+                MessageBox.Show($"恢复失败: {ex.Message}",
+                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+            finally
+            {
+                btnRestore.IsEnabled = true;
+            }
+        }
+
+        private async void btnSetResolution_Click(object sender, RoutedEventArgs e)
+        {
+            Debug.WriteLine("设置分辨率按钮被点击");
+            btnSetResolution.IsEnabled = false;
+
+            try
+            {
+                var connected = await IsDeviceConnectedAsync();
+                if (!connected)
+                {
+                    MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
+                        "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    btnSetResolution.IsEnabled = true;
+                    return;
+                }
+
+                var inputDialog = new ResolutionInputDialog();
+                if (inputDialog.ShowDialog() == true)
+                {
+                    string resolution = inputDialog.Resolution;
+                    if (!string.IsNullOrWhiteSpace(resolution))
+                    {
+                        Debug.WriteLine($"正在设置分辨率: {resolution}");
+                        var (output, error) = await RunAdbAsync($"shell wm size {resolution}");
+                        if (!string.IsNullOrEmpty(error))
+                        {
+                            MessageBox.Show($"设置分辨率失败: {error}", "错误",
+                                MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                        else
+                        {
+                            await RefreshAllAsync();
+                            MessageBox.Show($"分辨率已设置为: {resolution}", "成功",
+                                MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"设置分辨率失败: {ex.Message}");
+                MessageBox.Show($"设置分辨率失败: {ex.Message}",
+                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                btnSetResolution.IsEnabled = true;
+            }
+        }
+
+        private async void btnLoadApps_Click(object sender, RoutedEventArgs e)
+        {
+            Debug.WriteLine("加载应用列表按钮被点击");
+            btnLoadApps.IsEnabled = false;
+
+            try
+            {
+                var connected = await IsDeviceConnectedAsync();
+                if (!connected)
+                {
+                    MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
+                        "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    btnLoadApps.IsEnabled = true;
+                    return;
+                }
+
+                var apps = await GetInstalledAppsAsync();
+                lvApps.ItemsSource = apps;
+                txtAppCount.Text = $"({apps.Count})";
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"加载应用列表失败: {ex.Message}");
+                MessageBox.Show($"加载应用列表失败: {ex.Message}",
+                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                btnLoadApps.IsEnabled = true;
+            }
+        }
+
+        private async void lvApps_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (lvApps.SelectedItem is AppInfo app)
+            {
+                Debug.WriteLine($"双击启动应用: {app.Name} ({app.PackageName})");
+                try
+                {
+                    var connected = await IsDeviceConnectedAsync();
+                    if (!connected)
+                    {
+                        MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
+                            "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    var (_, error) = await RunAdbAsync($"shell monkey -p {app.PackageName} -c android.intent.category.LAUNCHER 1");
+                    if (!string.IsNullOrEmpty(error) && !error.Contains("No activities found"))
+                    {
+                        MessageBox.Show($"启动应用失败: {error}", "错误",
+                            MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"启动应用失败: {ex.Message}");
+                    MessageBox.Show($"启动应用失败: {ex.Message}",
+                        "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private async Task<List<AppInfo>> GetInstalledAppsAsync()
+        {
+            var apps = new List<AppInfo>();
+            try
+            {
+                var (output, error) = await RunAdbAsync("shell pm list packages -3");
+                Debug.WriteLine($"应用列表输出: {output}");
+                Debug.WriteLine($"应用列表错误: {error}");
+                
+                if (string.IsNullOrWhiteSpace(output)) 
+                {
+                    Debug.WriteLine("应用列表输出为空");
+                    return apps;
+                }
+
+                string[] lines = output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                Debug.WriteLine($"应用列表行数: {lines.Length}");
+                
+                foreach (var line in lines)
+                {
+                    var trimmed = line.Trim();
+                    Debug.WriteLine($"处理行: {trimmed}");
+                    
+                    if (trimmed.StartsWith("package:"))
+                    {
+                        string packageName = trimmed.Substring("package:".Length).Trim();
+                        Debug.WriteLine($"找到包名: {packageName}");
+                        
+                        apps.Add(new AppInfo
+                        {
+                            Name = packageName,
+                            PackageName = packageName
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"获取应用列表失败: {ex.Message}");
+            }
+            return apps;
         }
     }
 
@@ -472,5 +715,11 @@ namespace AndroidConnectUI
         public string Name { get; set; } = "";
         public string PID { get; set; } = "";
         public string Memory { get; set; } = "";
+    }
+
+    public class AppInfo
+    {
+        public string Name { get; set; } = "";
+        public string PackageName { get; set; } = "";
     }
 }

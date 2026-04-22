@@ -70,9 +70,11 @@
             <Grid Grid.Row="1" Margin="24,8,24,16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="12"/>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
@@ -96,8 +98,18 @@
                     </StackPanel>
                 </Button>
 
+                <!-- 设置分辨率按钮 -->
+                <Button x:Name="btnSetResolution" Grid.Column="4" Style="{StaticResource PrimaryButton}"
+                        Click="btnSetResolution_Click" Height="52">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE799;" FontFamily="Segoe MDL2 Assets" FontSize="18"
+                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock Text="设置分辨率" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
                 <!-- 刷新按钮 -->
-                <Button x:Name="btnRefresh" Grid.Column="4" Style="{StaticResource PrimaryButton}"
+                <Button x:Name="btnRefresh" Grid.Column="6" Style="{StaticResource PrimaryButton}"
                         Click="btnRefresh_Click" Height="52">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="18"
@@ -285,7 +297,7 @@
                         </Grid>
                     </Border>
 
-                    <!-- 进程信息卡片 -->
+                    <!-- 应用列表卡片 -->
                     <Border Grid.Row="2" Style="{StaticResource CardPanel}">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -294,27 +306,44 @@
                             </Grid.RowDefinitions>
 
                             <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,12">
-                                <TextBlock Text="&#xE8FD;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                <TextBlock Text="&#xE71D;" FontFamily="Segoe MDL2 Assets" FontSize="16"
                                            Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="进程信息" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="txtProcessCount" Text="(0)"
+                                <TextBlock Text="应用列表" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="txtAppCount" Text="(0)"
                                            FontSize="12" Foreground="{StaticResource TextHintBrush}"
                                            VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                <Button x:Name="btnLoadApps" Content="&#xE72C;" 
+                                        FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                        Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
+                                        BorderThickness="0" Width="32" Height="24"
+                                        VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                                        Cursor="Hand" Click="btnLoadApps_Click"
+                                        Margin="8,0,0,0" ToolTip="刷新应用列表"/>
                             </StackPanel>
 
-                            <ListView x:Name="lvProcesses" Grid.Row="1"
-                                      Style="{StaticResource ModernListView}">
+                            <ListView x:Name="lvApps" Grid.Row="1"
+                                      Style="{StaticResource ModernListView}"
+                                      MouseDoubleClick="lvApps_MouseDoubleClick">
                                 <ListView.View>
                                     <GridView>
-                                        <GridViewColumn Header="进程名" Width="160"
-                                                        DisplayMemberBinding="{Binding Name}"
-                                                        HeaderContainerStyle="{StaticResource ModernGridViewColumnHeader}"/>
-                                        <GridViewColumn Header="PID" Width="70"
-                                                        DisplayMemberBinding="{Binding PID}"
-                                                        HeaderContainerStyle="{StaticResource ModernGridViewColumnHeader}"/>
-                                        <GridViewColumn Header="内存 (KB)" Width="100"
-                                                        DisplayMemberBinding="{Binding Memory}"
-                                                        HeaderContainerStyle="{StaticResource ModernGridViewColumnHeader}"/>
+                                        <GridViewColumn Header="应用名称" Width="200"
+                                                        HeaderContainerStyle="{StaticResource ModernGridViewColumnHeader}">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name}" 
+                                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Header="包名" Width="150"
+                                                        HeaderContainerStyle="{StaticResource ModernGridViewColumnHeader}">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding PackageName}" 
+                                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
                                     </GridView>
                                 </ListView.View>
                                 <ListView.ItemContainerStyle>
@@ -323,13 +352,14 @@
                                         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                                         <Setter Property="BorderThickness" Value="0"/>
                                         <Setter Property="Padding" Value="4,6"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
                                         <Setter Property="Template">
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="ListViewItem">
                                                     <Border x:Name="Bd" Background="{TemplateBinding Background}"
                                                             Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
-                                                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                                        <GridViewRowPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                                                     </Border>
                                                     <ControlTemplate.Triggers>
                                                         <Trigger Property="IsMouseOver" Value="True">
