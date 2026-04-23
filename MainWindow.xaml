@@ -127,11 +127,17 @@
 
             <!-- 主内容区域 -->
             <Grid Grid.Row="2" Margin="24,0,24,24">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="20"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="180"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="20"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
                 <!-- 左侧：系统资源监控 -->
                 <Grid Grid.Column="0">
@@ -702,6 +708,40 @@
                     </Border>
                 </Grid>
             </Grid>
+
+            <!-- 日志面板 -->
+            <Border Grid.Row="2" Style="{StaticResource CardPanel}" Margin="0,0,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,8">
+                        <TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                   Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="运行日志" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
+                        <Button x:Name="btnClearLog" Content="&#xE74D;" Click="btnClearLog_Click"
+                                FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
+                                BorderThickness="0" Width="28" Height="22"
+                                VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                                Cursor="Hand" Margin="8,0,0,0" ToolTip="清除日志"/>
+                    </StackPanel>
+
+                    <TextBox x:Name="txtLog" Grid.Row="1"
+                             IsReadOnly="True"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"
+                             FontFamily="Consolas"
+                             FontSize="11"
+                             Foreground="{StaticResource TextPrimaryBrush}"
+                             Background="{StaticResource CardBackgroundBrush}"
+                             BorderThickness="0"
+                             TextWrapping="NoWrap"
+                             AcceptsReturn="True"/>
+                </Grid>
+            </Border>
         </Grid>
     </Border>
 </Window>

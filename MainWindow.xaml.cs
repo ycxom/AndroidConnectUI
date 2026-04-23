@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -26,6 +27,8 @@ namespace AndroidConnectUI
         private bool _cachedSleepStateInitialized;
 
         private CancellationTokenSource _cts = new();
+        private StringBuilder _logBuffer = new();
+        private const int MAX_LOG_LINES = 500;
 
         public MainWindow()
         {
@@ -40,12 +43,55 @@ namespace AndroidConnectUI
             _monitorTimer.Tick += MonitorTimer_Tick;
             _monitorTimer.Start();
 
-            _ = RefreshAllAsync(_cts.Token);
+            _ = RefreshAllAsync(CancellationToken.None);
+        }
+
+        private void AddLog(string message)
+        {
+            string timestamp = DateTime.Now.ToString("HH:mm:ss");
+            string logLine = $"[{timestamp}] {message}";
+            
+            Debug.WriteLine(logLine);
+            
+            Dispatcher.BeginInvoke(() =>
+            {
+                _logBuffer.AppendLine(logLine);
+                
+                while (_logBuffer.Length > 50000)
+                {
+                    int firstLine = _logBuffer.ToString().IndexOf('\n');
+                    if (firstLine >= 0)
+                        _logBuffer.Remove(0, firstLine + 1);
+                    else
+                        break;
+                }
+                
+                txtLog.Text = _logBuffer.ToString();
+                
+                try
+                {
+                    txtLog.ScrollToEnd();
+                }
+                catch { }
+            });
+        }
+
+        private void btnClearLog_Click(object sender, RoutedEventArgs e)
+        {
+            _logBuffer.Clear();
+            txtLog.Text = "";
         }
 
         private async void MonitorTimer_Tick(object? sender, EventArgs e)
         {
-            _cts.Cancel();
+            if (_isRefreshing) return;
+
+            var oldCts = _cts;
+            if (oldCts != null)
+            {
+                try { oldCts.Cancel(); } catch { }
+            }
+
             _cts = new CancellationTokenSource();
             await RefreshAllAsync(_cts.Token);
         }
@@ -187,8 +233,14 @@ namespace AndroidConnectUI
                     }
                 });
             }
-            catch (OperationCanceledException) { }
-            catch { }
+            catch (OperationCanceledException) 
+            {
+                Debug.WriteLine("[Refresh] 被取消");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Refresh] 异常: {ex.Message}");
+            }
             finally
             {
                 _isRefreshing = false;
@@ -199,7 +251,8 @@ namespace AndroidConnectUI
         {
             try
             {
-                var (output, _) = await RunAdbAsync("shell cat /proc/stat");
+                var (output, error) = await RunAdbAsync("shell cat /proc/stat");
+                if (!string.IsNullOrEmpty(error) && !error.StartsWith("超时")) return (0, "--%");
                 if (string.IsNullOrEmpty(output)) return (0, "--%");
 
                 var lines = output.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
@@ -225,7 +278,10 @@ namespace AndroidConnectUI
                 float usage = 100f * (1f - (float)idleDiff / totalDiff);
                 return (usage, $"{usage:F1}%");
             }
-            catch { }
+            catch (Exception ex) 
+            {
+                Debug.WriteLine($"[CPU] 获取失败: {ex.Message}");
+            }
             return (0, "--%");
         }
 
@@ -233,7 +289,7 @@ namespace AndroidConnectUI
         {
             try
             {
-                var (output, _) = await RunAdbAsync(
+                var (output, error) = await RunAdbAsync(
                     "shell cat /sys/class/kgsl/kgsl-3d0/gpubusy 2>/dev/null");
                 if (!string.IsNullOrEmpty(output))
                 {
@@ -248,11 +304,14 @@ namespace AndroidConnectUI
                     }
                 }
 
-                var (output2, _) = await RunAdbAsync(
+                var (output2, error2) = await RunAdbAsync(
                     "shell cat /sys/class/devfreq/*/cur_freq 2>/dev/null && cat /sys/class/devfreq/*/max_freq 2>/dev/null");
                 if (!string.IsNullOrEmpty(output2)) return (0, "N/A");
             }
-            catch { }
+            catch (Exception ex) 
+            {
+                Debug.WriteLine($"[GPU] 获取失败: {ex.Message}");
+            }
             return (0, "N/A");
         }
 
@@ -315,7 +374,8 @@ namespace AndroidConnectUI
         {
             try
             {
-                var (output, _) = await RunAdbAsync("shell cat /proc/meminfo");
+                var (output, error) = await RunAdbAsync("shell cat /proc/meminfo");
+                if (!string.IsNullOrEmpty(error) && !error.StartsWith("超时")) return (0, "--%");
                 if (string.IsNullOrEmpty(output)) return (0, "--%");
 
                 long memTotal = 0, memAvailable = 0;
@@ -343,7 +403,10 @@ namespace AndroidConnectUI
                     return (usage, $"{usage:F1}%  ({usedStr}/{totalStr})");
                 }
             }
-            catch { }
+            catch (Exception ex) 
+            {
+                Debug.WriteLine($"[RAM] 获取失败: {ex.Message}");
+            }
             return (0, "--%");
         }
 
@@ -367,7 +430,14 @@ namespace AndroidConnectUI
         {
             try
             {
-                var (output, _) = await RunAdbAsync("devices");
+                var (output, error) = await RunAdbAsync("devices");
+                if (!string.IsNullOrEmpty(error) && !error.StartsWith("超时"))
+                {
+                    Debug.WriteLine($"[Device] 检查连接错误: {error}");
+                    return false;
+                }
+                if (string.IsNullOrEmpty(output)) return false;
+                
                 var lines = output.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
                 for (int i = 1; i < lines.Length; i++)
                 {
@@ -376,14 +446,18 @@ namespace AndroidConnectUI
                 }
                 return false;
             }
-            catch { return false; }
+            catch (Exception ex) 
+            { 
+                Debug.WriteLine($"[Device] 检查连接异常: {ex.Message}");
+                return false; 
+            }
         }
 
         private async Task<string> GetPhoneTemperatureAsync()
         {
             try
             {
-                var (output, _) = await RunAdbAsync(
+                var (output, error) = await RunAdbAsync(
                     "shell cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null");
                 if (!string.IsNullOrEmpty(output))
                 {
@@ -394,7 +468,10 @@ namespace AndroidConnectUI
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) 
+            {
+                Debug.WriteLine($"[温度] 获取失败: {ex.Message}");
+            }
             return "--°C";
         }
 
@@ -468,7 +545,14 @@ namespace AndroidConnectUI
         {
             try
             {
-                var (output, _) = await RunAdbAsync("shell dumpsys battery");
+                var (output, error) = await RunAdbAsync("shell dumpsys battery");
+                Debug.WriteLine($"[电池] dumpsys battery 输出: {output}");
+                if (!string.IsNullOrEmpty(error))
+                {
+                    Debug.WriteLine($"[电池] dumpsys battery 错误: {error}");
+                }
+                
+                if (!string.IsNullOrEmpty(error) && !error.StartsWith("超时")) return ("--%", "--", "--", "--°C");
                 if (string.IsNullOrEmpty(output)) return ("--%", "--", "--", "--°C");
 
                 string level = "--%";
@@ -477,17 +561,23 @@ namespace AndroidConnectUI
                 string temp = "--°C";
 
                 var lines = output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                Debug.WriteLine($"[电池] 共 {lines.Length} 行输出");
+                
                 foreach (var line in lines)
                 {
                     var trimmed = line.Trim();
+                    Debug.WriteLine($"[电池] 解析行: {trimmed}");
+                    
                     if (trimmed.StartsWith("level:"))
                     {
                         var val = trimmed.Substring("level:".Length).Trim();
+                        Debug.WriteLine($"[电池] 解析到电量值: {val}");
                         level = $"{val}%";
                     }
                     else if (trimmed.StartsWith("status:"))
                     {
                         var val = trimmed.Substring("status:".Length).Trim();
+                        Debug.WriteLine($"[电池] 解析到充电状态: {val}");
                         status = val switch
                         {
                             "1" => "未知",
@@ -503,17 +593,23 @@ namespace AndroidConnectUI
                         var val = trimmed.Substring("temperature:".Length).Trim();
                         if (int.TryParse(val, out int t))
                         {
+                            Debug.WriteLine($"[电池] 解析到温度值: {t}");
                             temp = $"{t / 10.0:F1}°C";
                         }
                     }
                 }
 
+                Debug.WriteLine($"[电池] 解析结果: level={level}, status={status}, temp={temp}");
+
                 var currentTask = RunAdbAsync("shell cat /sys/class/power_supply/battery/current_now 2>/dev/null");
                 var voltageTask = RunAdbAsync("shell cat /sys/class/power_supply/battery/voltage_now 2>/dev/null");
                 await Task.WhenAll(currentTask, voltageTask);
 
-                var (currentOutput, _) = currentTask.Result;
-                var (voltageOutput, _) = voltageTask.Result;
+                var (currentOutput, currentError) = currentTask.Result;
+                var (voltageOutput, voltageError) = voltageTask.Result;
+                
+                Debug.WriteLine($"[电池] current_now 输出: '{currentOutput}', 错误: '{currentError}'");
+                Debug.WriteLine($"[电池] voltage_now 输出: '{voltageOutput}', 错误: '{voltageError}'");
 
                 if (long.TryParse(currentOutput?.Trim(), out long current) &&
                     long.TryParse(voltageOutput?.Trim(), out long voltage))
@@ -522,13 +618,14 @@ namespace AndroidConnectUI
                     double voltageV = voltage / 1000000.0;
                     double watt = currentA * voltageV;
                     power = $"{watt:F2} W";
+                    Debug.WriteLine($"[电池] 计算功率: {watt:F2} W");
                 }
 
                 return (level, status, power, temp);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"获取电量失败: {ex.Message}");
+                Debug.WriteLine($"[电池] 获取失败: {ex.Message}");
             }
             return ("--%", "--", "--", "--°C");
         }
@@ -734,14 +831,23 @@ namespace AndroidConnectUI
                     process.StartInfo.UseShellExecute = false;
                     process.StartInfo.CreateNoWindow = true;
                     process.Start();
+                    process.WaitForExit(timeoutMs);
+                    
+                    if (!process.HasExited)
+                    {
+                        try { process.Kill(); } catch { }
+                        return ("", $"超时({timeoutMs}ms)");
+                    }
+                    
                     string output = process.StandardOutput.ReadToEnd();
                     string error = process.StandardError.ReadToEnd();
-                    process.WaitForExit(timeoutMs);
+                    Debug.WriteLine($"[ADB] {arguments} => exit={process.ExitCode}, stdout='{output.Substring(0, Math.Min(100, output.Length))}', stderr='{error.Substring(0, Math.Min(100, error.Length))}'");
                     return (output, error);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    return ("", "");
+                    Debug.WriteLine($"[ADB] 执行失败: {arguments} => {ex.Message}");
+                    return ("", ex.Message);
                 }
             });
         }
