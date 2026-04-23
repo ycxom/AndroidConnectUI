@@ -68,8 +68,9 @@ namespace AndroidConnectUI
                     var densityTask = GetPhoneDensityAsync();
                     var batteryTask = GetPhoneBatteryAsync();
                     var procTask = GetPhoneProcessesAsync();
+                    var sleepTask = GetPhoneSleepStateAsync();
 
-                    await Task.WhenAll(cpuTask, gpuTask, ramTask, tempTask, resTask, densityTask, batteryTask, procTask);
+                    await Task.WhenAll(cpuTask, gpuTask, ramTask, tempTask, resTask, densityTask, batteryTask, procTask, sleepTask);
 
                     Dispatcher.Invoke(() =>
                     {
@@ -94,6 +95,10 @@ namespace AndroidConnectUI
                         txtBatteryStatus.Text = status;
                         txtChargePower.Text = power;
                         txtBatteryTemp.Text = temp;
+
+                        var (sleepEnabled, sleepText) = sleepTask.Result;
+                        txtSleepStatus.Text = sleepText;
+                        toggleKeepAwake.IsChecked = sleepEnabled;
                     });
                 }
                 else
@@ -113,6 +118,8 @@ namespace AndroidConnectUI
                         txtBatteryStatus.Text = "--";
                         txtChargePower.Text = "--";
                         txtBatteryTemp.Text = "--°C";
+                        txtSleepStatus.Text = "设备未连接";
+                        toggleKeepAwake.IsChecked = false;
                     });
                 }
             }
@@ -402,6 +409,111 @@ namespace AndroidConnectUI
             return ("--%", "--", "--", "--°C");
         }
 
+        private async Task<(bool enabled, string text)> GetPhoneSleepStateAsync()
+        {
+            try
+            {
+                var (output, _) = await RunAdbAsync("shell settings get global stay_on_while_plugged_in");
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    var value = output.Trim();
+                    if (int.TryParse(value, out int stayOn))
+                    {
+                        if (stayOn == 0)
+                        {
+                            return (false, "默认休眠");
+                        }
+                        else if (stayOn == 3)
+                        {
+                            return (true, "充电/USB/无线均不休眠");
+                        }
+                        else if (stayOn == 2)
+                        {
+                            return (true, "无线充电不休眠");
+                        }
+                        else if (stayOn == 1)
+                        {
+                            return (true, "USB连接不休眠");
+                        }
+                        return (stayOn != 0, $"自定义: {value}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"获取不休眠状态失败: {ex.Message}");
+            }
+            return (false, "获取失败");
+        }
+
+        private async void toggleKeepAwake_Checked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var connected = await IsDeviceConnectedAsync();
+                if (!connected)
+                {
+                    MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
+                        "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    toggleKeepAwake.IsChecked = false;
+                    return;
+                }
+
+                var (_, error) = await RunAdbAsync("shell settings put global stay_on_while_plugged_in 3");
+                if (!string.IsNullOrEmpty(error) && !error.Contains("Warning"))
+                {
+                    Debug.WriteLine($"设置不休眠失败: {error}");
+                    MessageBox.Show($"设置不休眠失败: {error}", "错误",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    toggleKeepAwake.IsChecked = false;
+                    return;
+                }
+
+                txtSleepStatus.Text = "充电/USB/无线均不休眠";
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"设置不休眠异常: {ex.Message}");
+                MessageBox.Show($"设置不休眠失败: {ex.Message}",
+                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                toggleKeepAwake.IsChecked = false;
+            }
+        }
+
+        private async void toggleKeepAwake_Unchecked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var connected = await IsDeviceConnectedAsync();
+                if (!connected)
+                {
+                    MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
+                        "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    toggleKeepAwake.IsChecked = true;
+                    return;
+                }
+
+                var (_, error) = await RunAdbAsync("shell settings put global stay_on_while_plugged_in 0");
+                if (!string.IsNullOrEmpty(error) && !error.Contains("Warning"))
+                {
+                    Debug.WriteLine($"关闭不休眠失败: {error}");
+                    MessageBox.Show($"关闭不休眠失败: {error}", "错误",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    toggleKeepAwake.IsChecked = true;
+                    return;
+                }
+
+                txtSleepStatus.Text = "默认休眠";
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"关闭不休眠异常: {ex.Message}");
+                MessageBox.Show($"关闭不休眠失败: {ex.Message}",
+                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                toggleKeepAwake.IsChecked = true;
+            }
+        }
+
         private async Task<List<ProcessInfo>> GetPhoneProcessesAsync()
         {
             var processes = new List<ProcessInfo>();
@@ -550,7 +662,7 @@ namespace AndroidConnectUI
                     return;
                 }
 
-                var (output, error) = await RunAdbAsync("shell tcpip 5555");
+                var (output, error) = await RunAdbAsync("tcpip 5555");
                 Debug.WriteLine($"无线ADB输出: {output}");
                 Debug.WriteLine($"无线ADB错误: {error}");
 

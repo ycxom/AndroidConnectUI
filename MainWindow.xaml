@@ -231,6 +231,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Text="&#xE8E4;  设备信息" Style="{StaticResource SectionTitle}"/>
@@ -476,9 +477,9 @@
                             </StackPanel>
 
                             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button x:Name="btnKeyPower" Content="&#xE7E8;" 
+                                <Button x:Name="btnKeyPower" Content="&#xE7E8;"
                                         FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                        Background="{StaticResource CardBackgroundBrush}" 
+                                        Background="{StaticResource CardBackgroundBrush}"
                                         Foreground="{StaticResource TextPrimaryBrush}"
                                         BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
                                         Width="56" Height="40" Margin="0,0,8,0"
@@ -515,9 +516,9 @@
                                         </Style>
                                     </Button.Style>
                                 </Button>
-                                <Button x:Name="btnKeyVolDown" Content="&#xE929;" 
+                                <Button x:Name="btnKeyVolDown" Content="&#xE929;"
                                         FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                        Background="{StaticResource CardBackgroundBrush}" 
+                                        Background="{StaticResource CardBackgroundBrush}"
                                         Foreground="{StaticResource TextPrimaryBrush}"
                                         BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
                                         Width="56" Height="40" Margin="0,0,8,0"
@@ -554,9 +555,9 @@
                                         </Style>
                                     </Button.Style>
                                 </Button>
-                                <Button x:Name="btnKeyVolUp" Content="&#xE92A;" 
+                                <Button x:Name="btnKeyVolUp" Content="&#xE92A;"
                                         FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                        Background="{StaticResource CardBackgroundBrush}" 
+                                        Background="{StaticResource CardBackgroundBrush}"
                                         Foreground="{StaticResource TextPrimaryBrush}"
                                         BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
                                         Width="56" Height="40"
@@ -593,6 +594,82 @@
                                         </Style>
                                     </Button.Style>
                                 </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 不休眠快速设置卡片 -->
+                    <Border Grid.Row="5" Style="{StaticResource CardPanel}" Margin="0,10,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,12">
+                                <TextBlock Text="&#xE708;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                           Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="不休眠设置" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="txtSleepStatus" Text="自动检测中..." FontSize="12"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <ToggleButton x:Name="toggleKeepAwake" Width="120" Height="40"
+                                              Checked="toggleKeepAwake_Checked" Unchecked="toggleKeepAwake_Unchecked"
+                                              Cursor="Hand" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <ToggleButton.Style>
+                                        <Style TargetType="ToggleButton">
+                                            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ToggleButton">
+                                                        <Border x:Name="border"
+                                                                Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                                CornerRadius="8" Padding="12,0">
+                                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                                <TextBlock x:Name="iconText" Text="&#xE916;"
+                                                                           FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                <TextBlock x:Name="labelText" Text="关闭"
+                                                                           FontSize="13" FontWeight="SemiBold"
+                                                                           VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsChecked" Value="True">
+                                                                <Setter TargetName="border" Property="Background" Value="#FF9F7C00"/>
+                                                                <Setter TargetName="border" Property="BorderBrush" Value="#FFB794"/>
+                                                                <Setter TargetName="iconText" Property="Foreground" Value="White"/>
+                                                                <Setter TargetName="labelText" Property="Foreground" Value="White"/>
+                                                                <Setter TargetName="iconText" Property="Text" Value="&#xE916;"/>
+                                                                <Setter TargetName="labelText" Property="Text" Value="开启"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsChecked" Value="False">
+                                                                <Setter TargetName="border" Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+                                                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource CardBorderBrush}"/>
+                                                                <Setter TargetName="iconText" Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                                                <Setter TargetName="labelText" Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                                                <Setter TargetName="iconText" Property="Text" Value="&#xE708;"/>
+                                                                <Setter TargetName="labelText" Property="Text" Value="关闭"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ToggleButton.Style>
+                                </ToggleButton>
                             </StackPanel>
                         </Grid>
                     </Border>
