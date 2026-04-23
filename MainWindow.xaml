@@ -140,6 +140,7 @@
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Text="&#xE950;  系统资源" Style="{StaticResource SectionTitle}"/>
@@ -196,8 +197,34 @@
                         </Grid>
                     </Border>
 
+                    <!-- FPS 卡片 -->
+                    <Border Grid.Row="3" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="80"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Grid.Row="0">
+                                <TextBlock Text="&#xE8B5;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                           Foreground="{StaticResource FpsBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="FPS" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <TextBlock x:Name="txtFPS" Grid.Row="1" Text="0 FPS"
+                                       Style="{StaticResource MetricValue}"
+                                       Foreground="{StaticResource FpsBrush}" Margin="0,4,0,4"/>
+
+                            <local:LineChartControl x:Name="chartFPS" Grid.Row="2"
+                                                    Stroke="{StaticResource FpsBrush}"
+                                                    Fill="#2640FF80"
+                                                    StrokeThickness="2"/>
+                        </Grid>
+                    </Border>
+
                     <!-- RAM 卡片 -->
-                    <Border Grid.Row="3" Style="{StaticResource CardPanel}">
+                    <Border Grid.Row="4" Style="{StaticResource CardPanel}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>

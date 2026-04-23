@@ -19,6 +19,14 @@ namespace AndroidConnectUI
         private long _prevCpuTotal;
         private long _prevCpuIdle;
 
+        private int _refreshCounter;
+        private string _cachedResolution = "--";
+        private string _cachedDensity = "--";
+        private List<ProcessInfo> _cachedProcesses = new();
+        private bool _cachedSleepStateInitialized;
+
+        private CancellationTokenSource _cts = new();
+
         public MainWindow()
         {
             InitializeComponent();
@@ -28,29 +36,32 @@ namespace AndroidConnectUI
         private void InitializeMonitoring()
         {
             _monitorTimer = new DispatcherTimer();
-            _monitorTimer.Interval = TimeSpan.FromSeconds(2);
+            _monitorTimer.Interval = TimeSpan.FromSeconds(1);
             _monitorTimer.Tick += MonitorTimer_Tick;
             _monitorTimer.Start();
 
-            _ = RefreshAllAsync();
+            _ = RefreshAllAsync(_cts.Token);
         }
 
         private async void MonitorTimer_Tick(object? sender, EventArgs e)
         {
-            await RefreshAllAsync();
+            _cts.Cancel();
+            _cts = new CancellationTokenSource();
+            await RefreshAllAsync(_cts.Token);
         }
 
-        private async Task RefreshAllAsync()
+        private async Task RefreshAllAsync(CancellationToken ct)
         {
             if (_isRefreshing) return;
             _isRefreshing = true;
+            _refreshCounter++;
 
             try
             {
                 bool connected = await IsDeviceConnectedAsync();
                 _isConnected = connected;
 
-                Dispatcher.Invoke(() =>
+                _ = Dispatcher.BeginInvoke(() =>
                 {
                     txtDeviceStatus.Text = connected ? "已连接" : "未连接";
                     statusDot.Fill = connected
@@ -58,57 +69,21 @@ namespace AndroidConnectUI
                         : new SolidColorBrush(Color.FromRgb(255, 61, 113));
                 });
 
-                if (connected)
+                if (!connected)
                 {
-                    var cpuTask = GetPhoneCpuUsageAsync();
-                    var gpuTask = GetPhoneGpuUsageAsync();
-                    var ramTask = GetPhoneRamUsageAsync();
-                    var tempTask = GetPhoneTemperatureAsync();
-                    var resTask = GetPhoneResolutionAsync();
-                    var densityTask = GetPhoneDensityAsync();
-                    var batteryTask = GetPhoneBatteryAsync();
-                    var procTask = GetPhoneProcessesAsync();
-                    var sleepTask = GetPhoneSleepStateAsync();
+                    _cachedResolution = "--";
+                    _cachedDensity = "--";
+                    _cachedProcesses = new();
+                    _cachedSleepStateInitialized = false;
 
-                    await Task.WhenAll(cpuTask, gpuTask, ramTask, tempTask, resTask, densityTask, batteryTask, procTask, sleepTask);
-
-                    Dispatcher.Invoke(() =>
-                    {
-                        var (cpuVal, cpuText) = cpuTask.Result;
-                        chartCPU.AddDataPoint(cpuVal);
-                        txtCPU.Text = cpuText;
-
-                        var (gpuVal, gpuText) = gpuTask.Result;
-                        chartGPU.AddDataPoint(gpuVal);
-                        txtGPU.Text = gpuText;
-
-                        var (ramVal, ramText) = ramTask.Result;
-                        chartRAM.AddDataPoint(ramVal);
-                        txtRAM.Text = ramText;
-
-                        txtPhoneTemp.Text = tempTask.Result;
-                        txtResolution.Text = resTask.Result;
-                        txtDensity.Text = densityTask.Result;
-
-                        var (level, status, power, temp) = batteryTask.Result;
-                        txtBatteryLevel.Text = level;
-                        txtBatteryStatus.Text = status;
-                        txtChargePower.Text = power;
-                        txtBatteryTemp.Text = temp;
-
-                        var (sleepEnabled, sleepText) = sleepTask.Result;
-                        txtSleepStatus.Text = sleepText;
-                        toggleKeepAwake.IsChecked = sleepEnabled;
-                    });
-                }
-                else
-                {
-                    Dispatcher.Invoke(() =>
+                    _ = Dispatcher.BeginInvoke(() =>
                     {
                         chartCPU.AddDataPoint(0);
                         txtCPU.Text = "--%";
                         chartGPU.AddDataPoint(0);
                         txtGPU.Text = "--%";
+                        chartFPS.AddDataPoint(0);
+                        txtFPS.Text = "-- FPS";
                         chartRAM.AddDataPoint(0);
                         txtRAM.Text = "--%";
                         txtPhoneTemp.Text = "--°C";
@@ -120,9 +95,99 @@ namespace AndroidConnectUI
                         txtBatteryTemp.Text = "--°C";
                         txtSleepStatus.Text = "设备未连接";
                         toggleKeepAwake.IsChecked = false;
+                        txtAppCount.Text = "(0)";
+                        lvApps.ItemsSource = new List<AppInfo>();
                     });
+                    return;
                 }
+
+                ct.ThrowIfCancellationRequested();
+
+                bool needFullRefresh = _refreshCounter % 10 == 0;
+
+                var cpuTask = GetPhoneCpuUsageAsync();
+                var gpuTask = GetPhoneGpuUsageAsync();
+                var fpsTask = GetPhoneFpsAsync();
+                var ramTask = GetPhoneRamUsageAsync();
+                var tempTask = GetPhoneTemperatureAsync();
+                var batteryTask = GetPhoneBatteryAsync();
+
+                Task<string>? resTask = null;
+                Task<string>? densityTask = null;
+                Task<List<ProcessInfo>>? procTask = null;
+                Task<(bool, string)>? sleepTask = null;
+
+                if (needFullRefresh)
+                {
+                    resTask = GetPhoneResolutionAsync();
+                    densityTask = GetPhoneDensityAsync();
+                    procTask = GetPhoneProcessesAsync();
+                    sleepTask = GetPhoneSleepStateAsync();
+                }
+
+                await Task.WhenAll(
+                    cpuTask, gpuTask, fpsTask, ramTask, tempTask, batteryTask
+                );
+
+                if (needFullRefresh && resTask != null && densityTask != null && procTask != null && sleepTask != null)
+                {
+                    await Task.WhenAll(resTask, densityTask, procTask, sleepTask);
+                    _cachedResolution = resTask.Result;
+                    _cachedDensity = densityTask.Result;
+                    _cachedProcesses = procTask.Result;
+                    _cachedSleepStateInitialized = true;
+                }
+
+                ct.ThrowIfCancellationRequested();
+
+                _ = Dispatcher.BeginInvoke(() =>
+                {
+                    var (cpuVal, cpuText) = cpuTask.Result;
+                    chartCPU.AddDataPoint(cpuVal);
+                    txtCPU.Text = cpuText;
+
+                    var (gpuVal, gpuText) = gpuTask.Result;
+                    chartGPU.AddDataPoint(gpuVal);
+                    txtGPU.Text = gpuText;
+
+                    var (fpsVal, fpsText) = fpsTask.Result;
+                    chartFPS.AddDataPoint(fpsVal);
+                    txtFPS.Text = fpsText;
+
+                    var (ramVal, ramText) = ramTask.Result;
+                    chartRAM.AddDataPoint(ramVal);
+                    txtRAM.Text = ramText;
+
+                    txtPhoneTemp.Text = tempTask.Result;
+
+                    var (level, status, power, temp) = batteryTask.Result;
+                    txtBatteryLevel.Text = level;
+                    txtBatteryStatus.Text = status;
+                    txtChargePower.Text = power;
+                    txtBatteryTemp.Text = temp;
+
+                    txtResolution.Text = _cachedResolution;
+                    txtDensity.Text = _cachedDensity;
+
+                    if (needFullRefresh && procTask != null)
+                    {
+                        lvApps.ItemsSource = procTask.Result;
+                        txtAppCount.Text = $"({procTask.Result.Count})";
+                    }
+
+                    if (needFullRefresh && sleepTask != null)
+                    {
+                        var (sleepEnabled, sleepText) = sleepTask.Result;
+                        txtSleepStatus.Text = sleepText;
+                        if (!_cachedSleepStateInitialized)
+                        {
+                            toggleKeepAwake.IsChecked = sleepEnabled;
+                            _cachedSleepStateInitialized = true;
+                        }
+                    }
+                });
             }
+            catch (OperationCanceledException) { }
             catch { }
             finally
             {
@@ -186,6 +251,61 @@ namespace AndroidConnectUI
                 var (output2, _) = await RunAdbAsync(
                     "shell cat /sys/class/devfreq/*/cur_freq 2>/dev/null && cat /sys/class/devfreq/*/max_freq 2>/dev/null");
                 if (!string.IsNullOrEmpty(output2)) return (0, "N/A");
+            }
+            catch { }
+            return (0, "N/A");
+        }
+
+        private async Task<(float value, string text)> GetPhoneFpsAsync()
+        {
+            try
+            {
+                await RunAdbAsync("shell dumpsys SurfaceFlinger --latency-clear");
+
+                var (latencyOutput, _) = await RunAdbAsync("shell dumpsys SurfaceFlinger --latency");
+                if (!string.IsNullOrEmpty(latencyOutput))
+                {
+                    var lines = latencyOutput.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    int frameCount = 0;
+                    
+                    foreach (var line in lines)
+                    {
+                        var parts = line.Split(new[] { '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length >= 3)
+                        {
+                            if (long.TryParse(parts[0], out long start) && 
+                                long.TryParse(parts[1], out long vsync) &&
+                                start > 0 && vsync > 0)
+                            {
+                                frameCount++;
+                            }
+                        }
+                    }
+
+                    if (frameCount > 1)
+                    {
+                        float fps = Math.Min(frameCount * 10, 120);
+                        return (fps, $"{fps:F0} FPS");
+                    }
+                }
+
+                var (gfxOutput, _) = await RunAdbAsync("shell dumpsys gfxinfo");
+                if (!string.IsNullOrEmpty(gfxOutput) && gfxOutput.Contains("Total frames rendered"))
+                {
+                    var lines = gfxOutput.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var line in lines)
+                    {
+                        if (line.Contains("Total frames rendered"))
+                        {
+                            var parts = line.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length >= 2 && int.TryParse(parts[1].Trim(), out int totalFrames))
+                            {
+                                float estimatedFps = Math.Min(totalFrames / 2, 120);
+                                return (estimatedFps, $"{estimatedFps:F0} FPS");
+                            }
+                        }
+                    }
+                }
             }
             catch { }
             return (0, "N/A");
@@ -388,8 +508,12 @@ namespace AndroidConnectUI
                     }
                 }
 
-                var (currentOutput, _) = await RunAdbAsync("shell cat /sys/class/power_supply/battery/current_now 2>/dev/null");
-                var (voltageOutput, _) = await RunAdbAsync("shell cat /sys/class/power_supply/battery/voltage_now 2>/dev/null");
+                var currentTask = RunAdbAsync("shell cat /sys/class/power_supply/battery/current_now 2>/dev/null");
+                var voltageTask = RunAdbAsync("shell cat /sys/class/power_supply/battery/voltage_now 2>/dev/null");
+                await Task.WhenAll(currentTask, voltageTask);
+
+                var (currentOutput, _) = currentTask.Result;
+                var (voltageOutput, _) = voltageTask.Result;
 
                 if (long.TryParse(currentOutput?.Trim(), out long current) &&
                     long.TryParse(voltageOutput?.Trim(), out long voltage))
@@ -596,7 +720,7 @@ namespace AndroidConnectUI
             return processes;
         }
 
-        private async Task<(string output, string error)> RunAdbAsync(string arguments)
+        private async Task<(string output, string error)> RunAdbAsync(string arguments, int timeoutMs = 2000)
         {
             return await Task.Run(() =>
             {
@@ -612,7 +736,7 @@ namespace AndroidConnectUI
                     process.Start();
                     string output = process.StandardOutput.ReadToEnd();
                     string error = process.StandardError.ReadToEnd();
-                    process.WaitForExit(5000);
+                    process.WaitForExit(timeoutMs);
                     return (output, error);
                 }
                 catch
@@ -811,7 +935,8 @@ namespace AndroidConnectUI
                     Debug.WriteLine($"恢复休眠设置警告: {error3}");
                 }
 
-                await RefreshAllAsync();
+                _refreshCounter = 9;
+                await RefreshAllAsync(CancellationToken.None);
 
                 MessageBox.Show("已成功恢复设备默认设置。", "成功",
                     MessageBoxButton.OK, MessageBoxImage.Information);
@@ -891,7 +1016,8 @@ namespace AndroidConnectUI
                         }
                     }
 
-                    await RefreshAllAsync();
+                    _refreshCounter = 9;
+                    await RefreshAllAsync(CancellationToken.None);
 
                     string message = "";
                     if (hasResolution) message += $"分辨率已设置为: {resolution}";

@@ -16,12 +16,14 @@
     <SolidColorBrush x:Key="TextHintBrush" Color="#606680"/>
     <SolidColorBrush x:Key="CpuBrush" Color="#FF6B6B"/>
     <SolidColorBrush x:Key="GpuBrush" Color="#A78BFA"/>
+    <SolidColorBrush x:Key="FpsBrush" Color="#40FF80"/>
     <SolidColorBrush x:Key="RamBrush" Color="#38BDF8"/>
     <SolidColorBrush x:Key="DividerBrush" Color="#2A2A4A"/>
     <SolidColorBrush x:Key="ProgressBarTrackBrush" Color="#2A2A4A"/>
 
     <Color x:Key="CpuColor">#FF6B6B</Color>
     <Color x:Key="GpuColor">#A78BFA</Color>
+    <Color x:Key="FpsColor">#40FF80</Color>
     <Color x:Key="RamColor">#38BDF8</Color>
 
     <Style x:Key="ModernWindow" TargetType="Window">
