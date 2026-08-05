@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -8,6 +9,10 @@ namespace AndroidConnectUI;
 
 public sealed class ScrcpyHost : HwndHost
 {
+    private static readonly Regex TextureSizePattern = new(
+        @"\bTexture:\s*(\d+)x(\d+)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private const int GWL_STYLE = -16;
     private const int GWL_EXSTYLE = -20;
     private const long WS_CHILD = 0x40000000L;
@@ -34,20 +39,15 @@ public sealed class ScrcpyHost : HwndHost
     private IntPtr _hostHandle;
     private IntPtr _scrcpyHandle;
     private Process? _process;
-    private readonly DispatcherTimer _videoSizeTimer;
-    private double _reportedAspectRatio;
 
     public event EventHandler? SessionEnded;
-    public event EventHandler<VideoSizeChangedEventArgs>? VideoSizeChanged;
 
-    public ScrcpyHost()
-    {
-        _videoSizeTimer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = TimeSpan.FromMilliseconds(500)
-        };
-        _videoSizeTimer.Tick += VideoSizeTimer_Tick;
-    }
+    /// <summary>
+    /// Raised once with scrcpy's genuine video size, measured while it is still a
+    /// top-level window. After embedding, the child is force-sized to the host, so
+    /// its client rect only echoes back our own layout and cannot be measured again.
+    /// </summary>
+    public event EventHandler<VideoSizeChangedEventArgs>? VideoSizeChanged;
 
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
     {
@@ -69,7 +69,9 @@ public sealed class ScrcpyHost : HwndHost
         {
             FileName = scrcpyPath,
             UseShellExecute = false,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
         };
         startInfo.ArgumentList.Add("--serial");
         startInfo.ArgumentList.Add(serial);
@@ -85,6 +87,10 @@ public sealed class ScrcpyHost : HwndHost
         if (!process.Start())
             throw new InvalidOperationException("scrcpy 启动失败。");
         _process = process;
+        process.OutputDataReceived += Process_LogDataReceived;
+        process.ErrorDataReceived += Process_LogDataReceived;
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
 
         IntPtr window = IntPtr.Zero;
         for (int attempt = 0; attempt < 200 && !process.HasExited; attempt++)
@@ -132,13 +138,10 @@ public sealed class ScrcpyHost : HwndHost
         ResizeChild();
         _ = ShowWindow(_hostHandle, SW_SHOW);
         _ = ShowWindow(window, SW_SHOW);
-        _videoSizeTimer.Start();
     }
 
     public void Stop()
     {
-        _videoSizeTimer.Stop();
-        _reportedAspectRatio = 0;
         if (_hostHandle != IntPtr.Zero)
             _ = ShowWindow(_hostHandle, SW_HIDE);
         _scrcpyHandle = IntPtr.Zero;
@@ -147,6 +150,10 @@ public sealed class ScrcpyHost : HwndHost
         if (process is null)
             return;
         process.Exited -= Process_Exited;
+        process.OutputDataReceived -= Process_LogDataReceived;
+        process.ErrorDataReceived -= Process_LogDataReceived;
+        try { process.CancelOutputRead(); } catch { }
+        try { process.CancelErrorRead(); } catch { }
         try
         {
             if (!process.HasExited)
@@ -177,23 +184,37 @@ public sealed class ScrcpyHost : HwndHost
                 Math.Max(1, (int)ActualWidth), Math.Max(1, (int)ActualHeight), true);
     }
 
-    private void VideoSizeTimer_Tick(object? sender, EventArgs e)
-    {
-        if (_scrcpyHandle != IntPtr.Zero)
-            ReportVideoSize(_scrcpyHandle);
-    }
-
     private void ReportVideoSize(IntPtr window)
     {
         if (!GetClientRect(window, out NativeRect rect) || rect.Width <= 0 || rect.Height <= 0)
             return;
 
-        double aspectRatio = (double)rect.Width / rect.Height;
-        if (_reportedAspectRatio > 0 && Math.Abs(aspectRatio - _reportedAspectRatio) < 0.05)
+        VideoSizeChanged?.Invoke(
+            this,
+            new VideoSizeChangedEventArgs(rect.Width, rect.Height, isDecoderReported: false));
+    }
+
+    private void Process_LogDataReceived(object sender, DataReceivedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(e.Data))
             return;
 
-        _reportedAspectRatio = aspectRatio;
-        VideoSizeChanged?.Invoke(this, new VideoSizeChangedEventArgs(rect.Width, rect.Height));
+        Match match = TextureSizePattern.Match(e.Data);
+        if (!match.Success ||
+            !int.TryParse(match.Groups[1].Value, out int width) ||
+            !int.TryParse(match.Groups[2].Value, out int height) ||
+            width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (ReferenceEquals(sender, _process))
+                VideoSizeChanged?.Invoke(
+                    this,
+                    new VideoSizeChangedEventArgs(width, height, isDecoderReported: true));
+        });
     }
 
     private void Process_Exited(object? sender, EventArgs e)
@@ -202,8 +223,13 @@ public sealed class ScrcpyHost : HwndHost
         {
             if (!ReferenceEquals(sender, _process))
                 return;
-            _videoSizeTimer.Stop();
-            _reportedAspectRatio = 0;
+            if (sender is Process process)
+            {
+                process.OutputDataReceived -= Process_LogDataReceived;
+                process.ErrorDataReceived -= Process_LogDataReceived;
+                try { process.CancelOutputRead(); } catch { }
+                try { process.CancelErrorRead(); } catch { }
+            }
             _scrcpyHandle = IntPtr.Zero;
             if (_hostHandle != IntPtr.Zero)
                 _ = ShowWindow(_hostHandle, SW_HIDE);
@@ -259,8 +285,12 @@ public sealed class ScrcpyHost : HwndHost
     }
 }
 
-public sealed class VideoSizeChangedEventArgs(int width, int height) : EventArgs
+public sealed class VideoSizeChangedEventArgs(
+    int width,
+    int height,
+    bool isDecoderReported) : EventArgs
 {
     public int Width { get; } = width;
     public int Height { get; } = height;
+    public bool IsDecoderReported { get; } = isDecoderReported;
 }

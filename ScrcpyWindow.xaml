@@ -139,16 +139,22 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse x:Name="sessionDot" Width="7" Height="7"
-                             Fill="{StaticResource WarningBrush}" Margin="0,0,7,0"/>
-                    <TextBlock x:Name="txtSessionStatus" Text="正在连接" FontSize="10"
-                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                    <Border Width="1" Height="14" Background="{StaticResource DividerBrush}" Margin="9,0"/>
-                    <TextBlock Text="设备：" FontSize="10" Foreground="{StaticResource TextHintBrush}"/>
-                    <TextBlock x:Name="txtDeviceSerial" FontSize="10"
-                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                </StackPanel>
+                <!-- A ScrollViewer reports no desired width, so this decorative
+                     session info can never widen the window past the video. -->
+                <ScrollViewer VerticalScrollBarVisibility="Disabled"
+                              HorizontalScrollBarVisibility="Hidden"
+                              VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse x:Name="sessionDot" Width="7" Height="7"
+                                 Fill="{StaticResource WarningBrush}" Margin="0,0,7,0"/>
+                        <TextBlock x:Name="txtSessionStatus" Text="正在连接" FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <Border Width="1" Height="14" Background="{StaticResource DividerBrush}" Margin="9,0"/>
+                        <TextBlock Text="设备：" FontSize="10" Foreground="{StaticResource TextHintBrush}"/>
+                        <TextBlock x:Name="txtDeviceSerial" FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                </ScrollViewer>
 
                 <StackPanel x:Name="sessionControls" Grid.Column="1" Orientation="Horizontal"
                             VerticalAlignment="Center" Visibility="Collapsed">
