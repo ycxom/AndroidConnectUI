@@ -21,6 +21,7 @@ namespace AndroidConnectUI
         private bool _isRefreshing;
         private bool _isUpdatingDeviceList;
         private string? _selectedDeviceSerial;
+        private ScrcpyWindow? _scrcpyWindow;
 
         private long _prevCpuTotal;
         private long _prevCpuIdle;
@@ -312,6 +313,7 @@ namespace AndroidConnectUI
 
             _selectedDeviceSerial = selectedSerial;
             try { _cts.Cancel(); } catch { }
+            StopScrcpy();
             ResetDeviceScopedState();
             _refreshCounter = 9;
             await RefreshAllAsync(CancellationToken.None);
@@ -1143,6 +1145,7 @@ namespace AndroidConnectUI
         private void btnClose_Click(object sender, RoutedEventArgs e)
         {
             _monitorTimer?.Stop();
+            StopScrcpy();
             SystemCommands.CloseWindow(this);
         }
 
@@ -1190,7 +1193,18 @@ namespace AndroidConnectUI
                     return;
                 }
 
-                var (output, error) = await RunAdbAsync("tcpip 5555");
+                string deviceDisplayName =
+                    (cmbAdbDevices.SelectedItem as AdbDeviceInfo)?.DisplayName
+                    ?? _selectedDeviceSerial!;
+                var dialog = new WirelessAdbDialog(deviceDisplayName, 5555)
+                {
+                    Owner = this
+                };
+                if (dialog.ShowDialog() != true)
+                    return;
+
+                int port = dialog.Port;
+                var (output, error) = await RunAdbAsync($"tcpip {port}");
                 Debug.WriteLine($"无线ADB输出: {output}");
                 Debug.WriteLine($"无线ADB错误: {error}");
 
@@ -1201,7 +1215,7 @@ namespace AndroidConnectUI
                 }
                 else
                 {
-                    MessageBox.Show("无线ADB已启动，端口: 5555\n请使用 adb connect <设备IP>:5555 连接",
+                    MessageBox.Show($"无线 ADB 已启动，端口：{port}\n请使用 adb connect <设备 IP>:{port} 连接。",
                         "成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
@@ -1270,28 +1284,23 @@ namespace AndroidConnectUI
                     return;
                 }
 
-                Debug.WriteLine("正在设置 USB 链接不休眠...");
-                var (_, error1) = await RunAdbAsync("shell settings put global stay_on_while_plugged_in 3");
-                if (!string.IsNullOrEmpty(error1))
-                {
-                    Debug.WriteLine($"设置不休眠警告: {error1}");
-                }
-
-                Debug.WriteLine("正在启动 scrcpy 并关闭屏幕...");
-                var scrcpyStartInfo = new ProcessStartInfo
-                {
-                    FileName = ToolManager.ScrcpyPath,
-                    Arguments = $"--serial=\"{_selectedDeviceSerial}\" --turn-screen-off --stay-awake",
-                    UseShellExecute = true,
-                    CreateNoWindow = false
-                };
-                Process.Start(scrcpyStartInfo);
-
-                MessageBox.Show("已成功启动 scrcpy 并设置设备不休眠。", "成功",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                StopScrcpy();
+                Debug.WriteLine("正在打开设备视窗...");
+                (int displayWidth, int displayHeight) = await GetActiveDisplaySizeAsync();
+                var window = new ScrcpyWindow(
+                    ToolManager.AdbPath,
+                    ToolManager.ScrcpyPath,
+                    _selectedDeviceSerial!,
+                    displayWidth,
+                    displayHeight);
+                window.Owner = this;
+                window.Closed += ScrcpyWindow_Closed;
+                _scrcpyWindow = window;
+                window.Show();
             }
             catch (Exception ex)
             {
+                StopScrcpy();
                 Debug.WriteLine($"启动失败: {ex.Message}");
                 MessageBox.Show($"启动失败: {ex.Message}\n\n请检查网络连接，或确认本地 ADB 与 scrcpy 工具完整。",
                     "错误", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -1300,6 +1309,71 @@ namespace AndroidConnectUI
             {
                 btnStart.IsEnabled = true;
             }
+        }
+
+        private static (int width, int height) ParseDisplaySize(string value)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                value ?? string.Empty,
+                @"(?<width>\d+)\s*x\s*(?<height>\d+)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (match.Success &&
+                int.TryParse(match.Groups["width"].Value, out int width) &&
+                int.TryParse(match.Groups["height"].Value, out int height) &&
+                width > 0 && height > 0)
+            {
+                return (width, height);
+            }
+
+            // ADB 查询失败时仍使用常见竖屏比例，避免退回到与设备无关的固定窗口。
+            return (1080, 2400);
+        }
+
+        private async Task<(int width, int height)> GetActiveDisplaySizeAsync()
+        {
+            // wm size reports the unrotated override (for example 720x1280).
+            // WindowManager bounds reflect the frame scrcpy is actually capturing.
+            var (boundsOutput, _) = await RunAdbAsync(
+                "shell dumpsys window displays | grep -m 1 mBounds=Rect");
+            var boundsMatch = System.Text.RegularExpressions.Regex.Match(
+                boundsOutput ?? string.Empty,
+                @"mBounds=Rect\(\s*0\s*,\s*0\s*-\s*(?<width>\d+)\s*,\s*(?<height>\d+)\s*\)");
+
+            if (boundsMatch.Success &&
+                int.TryParse(boundsMatch.Groups["width"].Value, out int width) &&
+                int.TryParse(boundsMatch.Groups["height"].Value, out int height) &&
+                width > 0 && height > 0)
+            {
+                Debug.WriteLine($"[scrcpy] active display size: {width}x{height}");
+                return (width, height);
+            }
+
+            return ParseDisplaySize(await GetPhoneResolutionAsync());
+        }
+
+        private async void PhysicalKey_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { Tag: string keyCode })
+                await SendKeyEvent(keyCode);
+        }
+
+        private void ScrcpyWindow_Closed(object? sender, EventArgs e)
+        {
+            if (sender is not ScrcpyWindow window || !ReferenceEquals(window, _scrcpyWindow))
+                return;
+            window.Closed -= ScrcpyWindow_Closed;
+            _scrcpyWindow = null;
+        }
+
+        private void StopScrcpy()
+        {
+            ScrcpyWindow? window = _scrcpyWindow;
+            _scrcpyWindow = null;
+            if (window is null)
+                return;
+            window.Closed -= ScrcpyWindow_Closed;
+            window.Close();
         }
 
         private async void btnRestore_Click(object sender, RoutedEventArgs e)
@@ -1330,13 +1404,6 @@ namespace AndroidConnectUI
                 if (!string.IsNullOrEmpty(error2))
                 {
                     Debug.WriteLine($"恢复密度警告: {error2}");
-                }
-
-                Debug.WriteLine("正在恢复休眠设置...");
-                var (_, error3) = await RunAdbAsync("shell settings put global stay_on_while_plugged_in 0");
-                if (!string.IsNullOrEmpty(error3))
-                {
-                    Debug.WriteLine($"恢复休眠设置警告: {error3}");
                 }
 
                 _refreshCounter = 9;
@@ -1633,6 +1700,8 @@ namespace AndroidConnectUI
         public string? Model { get; }
         public string DisplayName { get; }
         public bool IsOnline => State.Equals("device", StringComparison.OrdinalIgnoreCase);
+
+        public override string ToString() => DisplayName;
 
         public static AdbDeviceInfo Placeholder(string text) => new("", "未连接", text);
     }

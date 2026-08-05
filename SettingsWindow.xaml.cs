@@ -14,6 +14,7 @@ namespace AndroidConnectUI
             _deviceSerial = deviceSerial;
             InitializeComponent();
             txtDeviceSerial.Text = deviceSerial;
+            toggleWindowAnimations.IsChecked = AppPreferences.WindowAnimationsEnabled;
             Loaded += SettingsWindow_Loaded;
         }
 
@@ -54,6 +55,8 @@ namespace AndroidConnectUI
                         MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
+
+                AppPreferences.WindowAnimationsEnabled = toggleWindowAnimations.IsChecked == true;
 
                 DialogResult = true;
                 Close();

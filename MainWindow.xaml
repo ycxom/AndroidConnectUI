@@ -186,6 +186,7 @@
                     <RowDefinition Height="16"/>
                     <RowDefinition Height="220"/>
                 </Grid.RowDefinitions>
+
                 <Grid Grid.Row="0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -573,7 +574,7 @@
                     </Border>
 
                     <!-- 物理按键卡片 -->
-                    <Border Grid.Row="4" Style="{StaticResource CardPanel}">
+                    <Border Grid.Row="4" Style="{StaticResource CardPanel}" Visibility="Collapsed">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -773,6 +774,7 @@
             </Border>
         </Grid>
         </ScrollViewer>
+
     </Grid>
 </Border>
 </Window>
