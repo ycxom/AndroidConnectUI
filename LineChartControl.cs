@@ -57,6 +57,12 @@ namespace AndroidConnectUI
             InvalidateVisual();
         }
 
+        public void Clear()
+        {
+            _dataPoints.Clear();
+            InvalidateVisual();
+        }
+
         protected override void OnRender(DrawingContext dc)
         {
             base.OnRender(dc);

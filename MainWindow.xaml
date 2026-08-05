@@ -4,26 +4,34 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:AndroidConnectUI"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         mc:Ignorable="d"
         Style="{StaticResource ModernWindow}"
         Title="Android Connect"
-        Height="932"
-        Width="1047"
+        Height="900"
+        Width="1180"
+        MinHeight="700"
+        MinWidth="920"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanMinimize"
-        AllowsTransparency="True"
-        WindowStyle="None"
-        Background="Transparent">
+        ResizeMode="CanResizeWithGrip"
+        AllowsTransparency="False"
+        WindowStyle="SingleBorderWindow"
+        Background="{StaticResource BackgroundBrush}"
+        StateChanged="MainWindow_StateChanged">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="52"
+                            ResizeBorderThickness="8"
+                            GlassFrameThickness="0"
+                            CornerRadius="0"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
 
     <Border x:Name="WindowBorder"
             Background="{StaticResource BackgroundBrush}"
-            CornerRadius="16"
-            BorderBrush="{StaticResource CardBorderBrush}"
-            BorderThickness="1"
-            Margin="8">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="30" ShadowDepth="0" Opacity="0.5" Color="#000000"/>
-        </Border.Effect>
+            CornerRadius="18"
+            BorderThickness="0"
+            Margin="0">
 
         <Grid>
             <Grid.RowDefinitions>
@@ -45,35 +53,46 @@
                                Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBlock Text="Android Connect" FontSize="15" FontWeight="SemiBold"
                                Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-                    <TextBlock Text="OCR" FontSize="11" FontWeight="Normal"
+                    <TextBlock Text="DEVICE STUDIO" FontSize="10" FontWeight="SemiBold"
                                Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center"
                                Margin="8,0,0,0" Opacity="0.8"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,8,0">
                     <Button x:Name="btnSettings" Content="&#xE713;" Click="btnSettings_Click"
+                            Style="{StaticResource WindowCommandButton}"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
                             FontFamily="Segoe MDL2 Assets" FontSize="12"
-                            Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
-                            BorderThickness="0" Width="40" Height="32"
                             VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
                             Cursor="Hand" ToolTip="设置"/>
                     <Button x:Name="btnMinimize" Content="&#xE921;" Click="btnMinimize_Click"
+                            Style="{StaticResource WindowCommandButton}"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
                             FontFamily="Segoe MDL2 Assets" FontSize="12"
-                            Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
-                            BorderThickness="0" Width="40" Height="32"
                             VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
                             Cursor="Hand"/>
-                    <Button x:Name="btnClose" Content="&#xE711;" Click="btnClose_Click"
+                    <Button x:Name="btnMaximize" Content="&#xE922;" Click="btnMaximize_Click"
+                            Style="{StaticResource WindowCommandButton}"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
                             FontFamily="Segoe MDL2 Assets" FontSize="12"
-                            Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
-                            BorderThickness="0" Width="40" Height="32"
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                            Cursor="Hand" ToolTip="最大化"/>
+                    <Button x:Name="btnClose" Content="&#xE711;" Click="btnClose_Click"
+                            Style="{StaticResource CloseWindowButton}"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                            FontFamily="Segoe MDL2 Assets" FontSize="12"
                             VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
                             Cursor="Hand"/>
                 </StackPanel>
             </Grid>
 
             <!-- 操作按钮区域 -->
-            <Grid Grid.Row="1" Margin="24,8,24,16">
+            <Grid Grid.Row="1" Margin="24,6,24,18">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="12"/>
@@ -84,9 +103,43 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
+                <Border Grid.Row="0" Grid.ColumnSpan="7" Style="{StaticResource CardPanel}" Padding="14,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Width="34" Height="34" CornerRadius="8"
+                                Background="#1860CDFF" Margin="0,0,10,0">
+                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                       Foreground="{StaticResource PrimaryBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="ADB 设备" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="所有操作将发送到当前选择的设备" FontSize="10"
+                                       Foreground="{StaticResource TextHintBrush}"/>
+                        </StackPanel>
+                        <ComboBox x:Name="cmbAdbDevices" Grid.Column="2" Width="360" Height="36"
+                                  Margin="12,0,8,0" Style="{StaticResource DeviceComboBox}"
+                                  DisplayMemberPath="DisplayName"
+                                  SelectionChanged="cmbAdbDevices_SelectionChanged"
+                                  ToolTip="选择 ADB 设备"/>
+                        <Button x:Name="btnRefreshDevices" Grid.Column="3" Content="&#xE72C;"
+                                Click="btnRefreshDevices_Click"
+                                Style="{StaticResource WindowCommandButton}"
+                                Width="36" Height="36"
+                                FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                ToolTip="刷新设备列表"/>
+                    </Grid>
+                </Border>
+
                 <!-- 启动连接按钮 -->
-                <Button x:Name="btnStart" Grid.Column="0" Style="{StaticResource SuccessButton}"
-                        Click="btnStart_Click" Height="52">
+                <Button x:Name="btnStart" Grid.Row="2" Grid.Column="0" Style="{StaticResource SuccessButton}"
+                        Click="btnStart_Click" Height="48">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE912;" FontFamily="Segoe MDL2 Assets" FontSize="18"
                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
@@ -95,8 +148,8 @@
                 </Button>
 
                 <!-- 恢复分辨率按钮 -->
-                <Button x:Name="btnRestore" Grid.Column="2" Style="{StaticResource InfoButton}"
-                        Click="btnRestore_Click" Height="52">
+                <Button x:Name="btnRestore" Grid.Row="2" Grid.Column="2" Style="{StaticResource SecondaryButton}"
+                        Click="btnRestore_Click" Height="48">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="18"
                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
@@ -105,8 +158,8 @@
                 </Button>
 
                 <!-- 设置分辨率按钮 -->
-                <Button x:Name="btnSetResolution" Grid.Column="4" Style="{StaticResource PrimaryButton}"
-                        Click="btnSetResolution_Click" Height="52">
+                <Button x:Name="btnSetResolution" Grid.Row="2" Grid.Column="4" Style="{StaticResource PrimaryButton}"
+                        Click="btnSetResolution_Click" Height="48">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE799;" FontFamily="Segoe MDL2 Assets" FontSize="18"
                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
@@ -115,8 +168,8 @@
                 </Button>
 
                 <!-- 无线ADB按钮 -->
-                <Button x:Name="btnWirelessAdb" Grid.Column="6" Style="{StaticResource PrimaryButton}"
-                        Click="btnWirelessAdb_Click" Height="52">
+                <Button x:Name="btnWirelessAdb" Grid.Row="2" Grid.Column="6" Style="{StaticResource SecondaryButton}"
+                        Click="btnWirelessAdb_Click" Height="48">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE701;" FontFamily="Segoe MDL2 Assets" FontSize="18"
                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
@@ -126,11 +179,12 @@
             </Grid>
 
             <!-- 主内容区域 -->
-            <Grid Grid.Row="2" Margin="24,0,24,24">
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid Margin="24,0,24,24">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="8"/>
-                    <RowDefinition Height="180"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="16"/>
+                    <RowDefinition Height="220"/>
                 </Grid.RowDefinitions>
                 <Grid Grid.Row="0">
                     <Grid.ColumnDefinitions>
@@ -140,19 +194,35 @@
                     </Grid.ColumnDefinitions>
 
                 <!-- 左侧：系统资源监控 -->
-                <Grid Grid.Column="0">
+                <Grid x:Name="ResourceTileGrid" Grid.Column="0" AllowDrop="True">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="175"/>
+                        <RowDefinition Height="175"/>
                     </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="&#xE950;  系统资源" Style="{StaticResource SectionTitle}"/>
+                    <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="&#xE950;  系统资源" Style="{StaticResource SectionTitle}" Margin="0"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="拖动磁贴以重新排列" Foreground="{StaticResource TextHintBrush}"
+                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="&#xE700;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                       Foreground="{StaticResource TextHintBrush}" FontSize="13"/>
+                        </StackPanel>
+                    </Grid>
 
                     <!-- CPU 卡片 -->
-                    <Border Grid.Row="1" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
+                    <Border x:Name="tileCPU" Tag="CPU" Grid.Row="1" Grid.Column="0" Style="{StaticResource DraggableTile}" Margin="0,0,6,10"
+                            PreviewMouseLeftButtonDown="Tile_MouseLeftButtonDown" PreviewMouseMove="Tile_MouseMove"
+                            DragEnter="Tile_DragEnter" DragLeave="Tile_DragLeave" Drop="Tile_Drop">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -178,7 +248,9 @@
                     </Border>
 
                     <!-- GPU 卡片 -->
-                    <Border Grid.Row="2" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
+                    <Border x:Name="tileGPU" Tag="GPU" Grid.Row="1" Grid.Column="1" Style="{StaticResource DraggableTile}" Margin="6,0,0,10"
+                            PreviewMouseLeftButtonDown="Tile_MouseLeftButtonDown" PreviewMouseMove="Tile_MouseMove"
+                            DragEnter="Tile_DragEnter" DragLeave="Tile_DragLeave" Drop="Tile_Drop">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -204,7 +276,9 @@
                     </Border>
 
                     <!-- FPS 卡片 -->
-                    <Border Grid.Row="3" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
+                    <Border x:Name="tileFPS" Tag="FPS" Grid.Row="2" Grid.Column="0" Style="{StaticResource DraggableTile}" Margin="0,0,6,0"
+                            PreviewMouseLeftButtonDown="Tile_MouseLeftButtonDown" PreviewMouseMove="Tile_MouseMove"
+                            DragEnter="Tile_DragEnter" DragLeave="Tile_DragLeave" Drop="Tile_Drop">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -230,7 +304,9 @@
                     </Border>
 
                     <!-- RAM 卡片 -->
-                    <Border Grid.Row="4" Style="{StaticResource CardPanel}">
+                    <Border x:Name="tileRAM" Tag="RAM" Grid.Row="2" Grid.Column="1" Style="{StaticResource DraggableTile}" Margin="6,0,0,0"
+                            PreviewMouseLeftButtonDown="Tile_MouseLeftButtonDown" PreviewMouseMove="Tile_MouseMove"
+                            DragEnter="Tile_DragEnter" DragLeave="Tile_DragLeave" Drop="Tile_Drop">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -262,12 +338,12 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="220"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="&#xE8E4;  设备信息" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Grid.Row="0" Text="&#xE8E4;  设备信息" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
 
                     <!-- 设备状态卡片 -->
                     <Border Grid.Row="1" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
@@ -297,7 +373,7 @@
                                                Foreground="{StaticResource TextPrimaryBrush}"/>
                                 </StackPanel>
 
-                                <TextBlock Grid.Column="2" Text="&#xE2A4;" FontFamily="Segoe MDL2 Assets"
+                                <TextBlock Grid.Column="2" Text="&#xE9CA;" FontFamily="Segoe MDL2 Assets"
                                            FontSize="16" Foreground="{StaticResource WarningBrush}"
                                            VerticalAlignment="Center" Margin="0,0,10,0"/>
                                 <StackPanel Grid.Column="3" VerticalAlignment="Center">
@@ -346,6 +422,7 @@
                     <Border Grid.Row="2" Style="{StaticResource CardPanel}" Margin="0,0,0,10">
                         <Grid>
                             <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
@@ -631,86 +708,38 @@
                         </Grid>
                     </Border>
 
-                    <!-- 不休眠快速设置卡片 -->
+                    <!-- 休眠设置卡片 -->
                     <Border Grid.Row="5" Style="{StaticResource CardPanel}" Margin="0,10,0,0">
                         <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="9" Background="#1860CDFF"
+                                    Margin="0,0,10,0">
                                 <TextBlock Text="&#xE708;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                           Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="不休眠设置" Style="{StaticResource MetricLabel}" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="txtSleepStatus" Text="自动检测中..." FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                           Foreground="{StaticResource PrimaryBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="休眠设置" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock x:Name="txtSleepStatus" Text="自动检测中..." FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-
-                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <ToggleButton x:Name="toggleKeepAwake" Width="120" Height="40"
-                                              Checked="toggleKeepAwake_Checked" Unchecked="toggleKeepAwake_Unchecked"
-                                              Cursor="Hand" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <ToggleButton.Style>
-                                        <Style TargetType="ToggleButton">
-                                            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
-                                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                                            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}"/>
-                                            <Setter Property="BorderThickness" Value="1"/>
-                                            <Setter Property="Cursor" Value="Hand"/>
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="ToggleButton">
-                                                        <Border x:Name="border"
-                                                                Background="{TemplateBinding Background}"
-                                                                BorderBrush="{TemplateBinding BorderBrush}"
-                                                                BorderThickness="{TemplateBinding BorderThickness}"
-                                                                CornerRadius="8" Padding="12,0">
-                                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                                <TextBlock x:Name="iconText" Text="&#xE916;"
-                                                                           FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                                                <TextBlock x:Name="labelText" Text="关闭"
-                                                                           FontSize="13" FontWeight="SemiBold"
-                                                                           VerticalAlignment="Center"/>
-                                                            </StackPanel>
-                                                        </Border>
-                                                        <ControlTemplate.Triggers>
-                                                            <Trigger Property="IsChecked" Value="True">
-                                                                <Setter TargetName="border" Property="Background" Value="#FF9F7C00"/>
-                                                                <Setter TargetName="border" Property="BorderBrush" Value="#FFB794"/>
-                                                                <Setter TargetName="iconText" Property="Foreground" Value="White"/>
-                                                                <Setter TargetName="labelText" Property="Foreground" Value="White"/>
-                                                                <Setter TargetName="iconText" Property="Text" Value="&#xE916;"/>
-                                                                <Setter TargetName="labelText" Property="Text" Value="开启"/>
-                                                            </Trigger>
-                                                            <Trigger Property="IsChecked" Value="False">
-                                                                <Setter TargetName="border" Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
-                                                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource CardBorderBrush}"/>
-                                                                <Setter TargetName="iconText" Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                                                                <Setter TargetName="labelText" Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                                                                <Setter TargetName="iconText" Property="Text" Value="&#xE708;"/>
-                                                                <Setter TargetName="labelText" Property="Text" Value="关闭"/>
-                                                            </Trigger>
-                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
-                                                            </Trigger>
-                                                        </ControlTemplate.Triggers>
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </ToggleButton.Style>
-                                </ToggleButton>
-                            </StackPanel>
+                            <Button Grid.Column="2" Content="管理" Click="btnSleepSettings_Click"
+                                    Style="{StaticResource SecondaryButton}" Height="34" Padding="14,6"/>
                         </Grid>
                     </Border>
                 </Grid>
-            </Grid>
+                </Grid>
 
-            <!-- 日志面板 -->
-            <Border Grid.Row="2" Style="{StaticResource CardPanel}" Margin="0,0,0,0">
+                <!-- 分隔行 -->
+                <Border Grid.Row="1" Background="Transparent"/>
+
+                <!-- 日志面板 -->
+                <Border Grid.Row="2" Style="{StaticResource CardPanel}" Margin="0,0,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -743,5 +772,7 @@
                 </Grid>
             </Border>
         </Grid>
-    </Border>
+        </ScrollViewer>
+    </Grid>
+</Border>
 </Window>

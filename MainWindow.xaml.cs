@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -16,6 +19,8 @@ namespace AndroidConnectUI
         private DispatcherTimer _monitorTimer = null!;
         private bool _isConnected;
         private bool _isRefreshing;
+        private bool _isUpdatingDeviceList;
+        private string? _selectedDeviceSerial;
 
         private long _prevCpuTotal;
         private long _prevCpuIdle;
@@ -24,16 +29,307 @@ namespace AndroidConnectUI
         private string _cachedResolution = "--";
         private string _cachedDensity = "--";
         private List<ProcessInfo> _cachedProcesses = new();
-        private bool _cachedSleepStateInitialized;
 
         private CancellationTokenSource _cts = new();
         private StringBuilder _logBuffer = new();
         private const int MAX_LOG_LINES = 500;
+        private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+        private const int DWMWA_BORDER_COLOR = 34;
+        private const uint DWMWA_COLOR_NONE = 0xFFFFFFFE;
+        private const uint DWMWCP_DONOTROUND = 1;
+        private const uint DWMWCP_ROUND = 2;
+        private Point _tileDragStart;
+        private Border? _draggedTile;
+        private static readonly string TileLayoutPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "AndroidConnect", "tile-layout.txt");
 
         public MainWindow()
         {
             InitializeComponent();
-            InitializeMonitoring();
+            RestoreTileLayout();
+            SourceInitialized += MainWindow_SourceInitialized;
+            Loaded += MainWindow_Loaded;
+        }
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(
+            IntPtr hwnd, int attribute, ref uint attributeValue, int attributeSize);
+
+        private void MainWindow_SourceInitialized(object? sender, EventArgs e)
+        {
+            SourceInitialized -= MainWindow_SourceInitialized;
+            ApplyDwmWindowAppearance();
+        }
+
+        private void ApplyDwmWindowAppearance()
+        {
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero)
+                return;
+
+            uint borderColor = DWMWA_COLOR_NONE;
+            _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_BORDER_COLOR,
+                ref borderColor,
+                Marshal.SizeOf<uint>());
+
+            uint cornerPreference = WindowState == WindowState.Maximized
+                ? DWMWCP_DONOTROUND
+                : DWMWCP_ROUND;
+            _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                ref cornerPreference,
+                Marshal.SizeOf<uint>());
+        }
+
+        private void Tile_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _tileDragStart = e.GetPosition(this);
+            _draggedTile = sender as Border;
+        }
+
+        private void Tile_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton != MouseButtonState.Pressed || sender is not Border tile || _draggedTile != tile)
+                return;
+
+            Point current = e.GetPosition(this);
+            if (Math.Abs(current.X - _tileDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(current.Y - _tileDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+                return;
+
+            tile.Opacity = 0.55;
+            try
+            {
+                DragDrop.DoDragDrop(tile, new DataObject(typeof(Border), tile), DragDropEffects.Move);
+            }
+            finally
+            {
+                tile.Opacity = 1;
+                _draggedTile = null;
+            }
+        }
+
+        private void Tile_DragEnter(object sender, DragEventArgs e)
+        {
+            if (sender is Border target && e.Data.GetDataPresent(typeof(Border)))
+            {
+                target.BorderThickness = new Thickness(2);
+                e.Effects = DragDropEffects.Move;
+                e.Handled = true;
+            }
+        }
+
+        private void Tile_DragLeave(object sender, DragEventArgs e)
+        {
+            if (sender is Border target)
+                target.BorderThickness = new Thickness(1);
+        }
+
+        private void Tile_Drop(object sender, DragEventArgs e)
+        {
+            if (sender is not Border target || e.Data.GetData(typeof(Border)) is not Border source)
+                return;
+
+            target.BorderThickness = new Thickness(1);
+            if (source == target)
+                return;
+
+            int sourceRow = Grid.GetRow(source);
+            int sourceColumn = Grid.GetColumn(source);
+            Grid.SetRow(source, Grid.GetRow(target));
+            Grid.SetColumn(source, Grid.GetColumn(target));
+            Grid.SetRow(target, sourceRow);
+            Grid.SetColumn(target, sourceColumn);
+
+            UpdateTileMargins();
+            SaveTileLayout();
+            e.Handled = true;
+        }
+
+        private IEnumerable<Border> ResourceTiles()
+        {
+            yield return tileCPU;
+            yield return tileGPU;
+            yield return tileFPS;
+            yield return tileRAM;
+        }
+
+        private void UpdateTileMargins()
+        {
+            foreach (Border tile in ResourceTiles())
+            {
+                int row = Grid.GetRow(tile);
+                int column = Grid.GetColumn(tile);
+                tile.Margin = new Thickness(column == 0 ? 0 : 6, 0, column == 0 ? 6 : 0, row == 1 ? 10 : 0);
+            }
+        }
+
+        private void SaveTileLayout()
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(TileLayoutPath)!);
+                var layout = ResourceTiles()
+                    .OrderBy(Grid.GetRow)
+                    .ThenBy(Grid.GetColumn)
+                    .Select(tile => tile.Tag?.ToString() ?? string.Empty);
+                File.WriteAllText(TileLayoutPath, string.Join(",", layout));
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Unable to save tile layout: {ex.Message}");
+            }
+        }
+
+        private void RestoreTileLayout()
+        {
+            try
+            {
+                if (!File.Exists(TileLayoutPath))
+                    return;
+
+                var tiles = ResourceTiles().ToDictionary(tile => tile.Tag?.ToString() ?? string.Empty);
+                string[] order = File.ReadAllText(TileLayoutPath).Split(',', StringSplitOptions.RemoveEmptyEntries);
+                if (order.Length != tiles.Count || order.Any(key => !tiles.ContainsKey(key)))
+                    return;
+
+                for (int index = 0; index < order.Length; index++)
+                {
+                    Grid.SetRow(tiles[order[index]], index / 2 + 1);
+                    Grid.SetColumn(tiles[order[index]], index % 2);
+                }
+                UpdateTileMargins();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Unable to restore tile layout: {ex.Message}");
+            }
+        }
+
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            Loaded -= MainWindow_Loaded;
+            try
+            {
+                Title = "Android Connect - 正在检查 ADB 与 scrcpy...";
+                await ToolManager.EnsureToolsAsync();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"自动准备 ADB 与 scrcpy 失败：{ex.Message}\n\n程序将继续尝试使用系统 PATH 中的工具。",
+                    "工具下载失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                Title = "Android Connect";
+                await RefreshAdbDevicesAsync();
+                InitializeMonitoring();
+            }
+        }
+
+        private async Task RefreshAdbDevicesAsync()
+        {
+            if (_isUpdatingDeviceList)
+                return;
+
+            _isUpdatingDeviceList = true;
+            btnRefreshDevices.IsEnabled = false;
+            try
+            {
+                var (output, error) = await RunAdbAsync("devices -l", 5000, useSelectedDevice: false);
+                if (!string.IsNullOrWhiteSpace(error))
+                    Debug.WriteLine($"[Device] Unable to enumerate devices: {error}");
+
+                var devices = ParseAdbDevices(output);
+                string? previousSerial = _selectedDeviceSerial;
+                AdbDeviceInfo? selected = devices.FirstOrDefault(device =>
+                    device.IsOnline && device.Serial == previousSerial)
+                    ?? devices.FirstOrDefault(device => device.IsOnline);
+
+                if (devices.Count == 0)
+                    devices.Add(AdbDeviceInfo.Placeholder("未检测到 ADB 设备"));
+
+                cmbAdbDevices.ItemsSource = devices;
+                cmbAdbDevices.SelectedItem = selected ?? devices[0];
+                _selectedDeviceSerial = selected?.Serial;
+                if (_selectedDeviceSerial != previousSerial)
+                    ResetDeviceScopedState();
+            }
+            finally
+            {
+                btnRefreshDevices.IsEnabled = true;
+                _isUpdatingDeviceList = false;
+            }
+        }
+
+        private static List<AdbDeviceInfo> ParseAdbDevices(string output)
+        {
+            var devices = new List<AdbDeviceInfo>();
+            foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string trimmed = line.Trim();
+                if (trimmed.StartsWith("List of devices", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.StartsWith("* daemon", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string[] parts = trimmed.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 2)
+                    continue;
+
+                string serial = parts[0];
+                string state = parts[1];
+                string? model = parts.Skip(2)
+                    .FirstOrDefault(part => part.StartsWith("model:", StringComparison.OrdinalIgnoreCase))?
+                    .Substring("model:".Length)
+                    .Replace('_', ' ');
+                devices.Add(new AdbDeviceInfo(serial, state, model));
+            }
+            return devices;
+        }
+
+        private async void btnRefreshDevices_Click(object sender, RoutedEventArgs e)
+        {
+            await RefreshAdbDevicesAsync();
+            _refreshCounter = 9;
+            await RefreshAllAsync(CancellationToken.None);
+        }
+
+        private async void cmbAdbDevices_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isUpdatingDeviceList)
+                return;
+
+            string? selectedSerial = (cmbAdbDevices.SelectedItem as AdbDeviceInfo) is { IsOnline: true } device
+                ? device.Serial
+                : null;
+            if (selectedSerial == _selectedDeviceSerial)
+                return;
+
+            _selectedDeviceSerial = selectedSerial;
+            try { _cts.Cancel(); } catch { }
+            ResetDeviceScopedState();
+            _refreshCounter = 9;
+            await RefreshAllAsync(CancellationToken.None);
+        }
+
+        private void ResetDeviceScopedState()
+        {
+            _prevCpuTotal = 0;
+            _prevCpuIdle = 0;
+            _cachedResolution = "--";
+            _cachedDensity = "--";
+            _cachedProcesses.Clear();
+            chartCPU.Clear();
+            chartGPU.Clear();
+            chartFPS.Clear();
+            chartRAM.Clear();
+            lvApps.ItemsSource = Array.Empty<AppInfo>();
+            txtAppCount.Text = "(0)";
         }
 
         private void InitializeMonitoring()
@@ -104,6 +400,9 @@ namespace AndroidConnectUI
 
             try
             {
+                if (_refreshCounter % 5 == 0)
+                    await RefreshAdbDevicesAsync();
+
                 bool connected = await IsDeviceConnectedAsync();
                 _isConnected = connected;
 
@@ -120,7 +419,6 @@ namespace AndroidConnectUI
                     _cachedResolution = "--";
                     _cachedDensity = "--";
                     _cachedProcesses = new();
-                    _cachedSleepStateInitialized = false;
 
                     _ = Dispatcher.BeginInvoke(() =>
                     {
@@ -140,7 +438,6 @@ namespace AndroidConnectUI
                         txtChargePower.Text = "--";
                         txtBatteryTemp.Text = "--°C";
                         txtSleepStatus.Text = "设备未连接";
-                        toggleKeepAwake.IsChecked = false;
                         txtAppCount.Text = "(0)";
                         lvApps.ItemsSource = new List<AppInfo>();
                     });
@@ -181,7 +478,6 @@ namespace AndroidConnectUI
                     _cachedResolution = resTask.Result;
                     _cachedDensity = densityTask.Result;
                     _cachedProcesses = procTask.Result;
-                    _cachedSleepStateInitialized = true;
                 }
 
                 ct.ThrowIfCancellationRequested();
@@ -223,13 +519,8 @@ namespace AndroidConnectUI
 
                     if (needFullRefresh && sleepTask != null)
                     {
-                        var (sleepEnabled, sleepText) = sleepTask.Result;
+                        var (_, sleepText) = sleepTask.Result;
                         txtSleepStatus.Text = sleepText;
-                        if (!_cachedSleepStateInitialized)
-                        {
-                            toggleKeepAwake.IsChecked = sleepEnabled;
-                            _cachedSleepStateInitialized = true;
-                        }
                     }
                 });
             }
@@ -430,21 +721,16 @@ namespace AndroidConnectUI
         {
             try
             {
-                var (output, error) = await RunAdbAsync("devices");
-                if (!string.IsNullOrEmpty(error) && !error.StartsWith("超时"))
+                if (string.IsNullOrWhiteSpace(_selectedDeviceSerial))
+                    return false;
+
+                var (output, error) = await RunAdbAsync("get-state");
+                if (!string.IsNullOrEmpty(error))
                 {
-                    Debug.WriteLine($"[Device] 检查连接错误: {error}");
+                    Debug.WriteLine($"[Device] Selected device check failed: {error}");
                     return false;
                 }
-                if (string.IsNullOrEmpty(output)) return false;
-                
-                var lines = output.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                for (int i = 1; i < lines.Length; i++)
-                {
-                    if (lines[i].Contains("\tdevice"))
-                        return true;
-                }
-                return false;
+                return output.Trim().Equals("device", StringComparison.OrdinalIgnoreCase);
             }
             catch (Exception ex) 
             { 
@@ -644,17 +930,25 @@ namespace AndroidConnectUI
                         {
                             return (false, "默认休眠");
                         }
-                        else if (stayOn == 3)
-                        {
-                            return (true, "充电/USB/无线均不休眠");
-                        }
                         else if (stayOn == 2)
                         {
-                            return (true, "无线充电不休眠");
+                            return (true, "USB 连接时保持唤醒");
                         }
                         else if (stayOn == 1)
                         {
-                            return (true, "USB连接不休眠");
+                            return (true, "交流电充电时保持唤醒");
+                        }
+                        else if (stayOn == 4)
+                        {
+                            return (true, "无线充电时保持唤醒");
+                        }
+                        else if (stayOn == 7)
+                        {
+                            return (true, "接通电源时保持唤醒");
+                        }
+                        else if (stayOn == 3)
+                        {
+                            return (true, "交流电或 USB 时保持唤醒");
                         }
                         return (stayOn != 0, $"自定义: {value}");
                     }
@@ -665,74 +959,6 @@ namespace AndroidConnectUI
                 Debug.WriteLine($"获取不休眠状态失败: {ex.Message}");
             }
             return (false, "获取失败");
-        }
-
-        private async void toggleKeepAwake_Checked(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var connected = await IsDeviceConnectedAsync();
-                if (!connected)
-                {
-                    MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
-                        "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    toggleKeepAwake.IsChecked = false;
-                    return;
-                }
-
-                var (_, error) = await RunAdbAsync("shell settings put global stay_on_while_plugged_in 3");
-                if (!string.IsNullOrEmpty(error) && !error.Contains("Warning"))
-                {
-                    Debug.WriteLine($"设置不休眠失败: {error}");
-                    MessageBox.Show($"设置不休眠失败: {error}", "错误",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
-                    toggleKeepAwake.IsChecked = false;
-                    return;
-                }
-
-                txtSleepStatus.Text = "充电/USB/无线均不休眠";
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"设置不休眠异常: {ex.Message}");
-                MessageBox.Show($"设置不休眠失败: {ex.Message}",
-                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-                toggleKeepAwake.IsChecked = false;
-            }
-        }
-
-        private async void toggleKeepAwake_Unchecked(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var connected = await IsDeviceConnectedAsync();
-                if (!connected)
-                {
-                    MessageBox.Show("未检测到 Android 设备，请确保设备已通过 USB 连接并启用了 USB 调试。",
-                        "设备未连接", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    toggleKeepAwake.IsChecked = true;
-                    return;
-                }
-
-                var (_, error) = await RunAdbAsync("shell settings put global stay_on_while_plugged_in 0");
-                if (!string.IsNullOrEmpty(error) && !error.Contains("Warning"))
-                {
-                    Debug.WriteLine($"关闭不休眠失败: {error}");
-                    MessageBox.Show($"关闭不休眠失败: {error}", "错误",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
-                    toggleKeepAwake.IsChecked = true;
-                    return;
-                }
-
-                txtSleepStatus.Text = "默认休眠";
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"关闭不休眠异常: {ex.Message}");
-                MessageBox.Show($"关闭不休眠失败: {ex.Message}",
-                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-                toggleKeepAwake.IsChecked = true;
-            }
         }
 
         private async Task<List<ProcessInfo>> GetPhoneProcessesAsync()
@@ -817,15 +1043,23 @@ namespace AndroidConnectUI
             return processes;
         }
 
-        private async Task<(string output, string error)> RunAdbAsync(string arguments, int timeoutMs = 2000)
+        private async Task<(string output, string error)> RunAdbAsync(
+            string arguments,
+            int timeoutMs = 2000,
+            bool useSelectedDevice = true)
         {
+            string? selectedSerial = _selectedDeviceSerial;
+            string effectiveArguments = useSelectedDevice && !string.IsNullOrWhiteSpace(selectedSerial)
+                ? $"-s \"{selectedSerial.Replace("\"", "\\\"")}\" {arguments}"
+                : arguments;
+
             return await Task.Run(() =>
             {
                 try
                 {
                     using var process = new Process();
-                    process.StartInfo.FileName = "adb";
-                    process.StartInfo.Arguments = arguments;
+                    process.StartInfo.FileName = ToolManager.AdbPath;
+                    process.StartInfo.Arguments = effectiveArguments;
                     process.StartInfo.RedirectStandardOutput = true;
                     process.StartInfo.RedirectStandardError = true;
                     process.StartInfo.UseShellExecute = false;
@@ -841,12 +1075,12 @@ namespace AndroidConnectUI
                     
                     string output = process.StandardOutput.ReadToEnd();
                     string error = process.StandardError.ReadToEnd();
-                    Debug.WriteLine($"[ADB] {arguments} => exit={process.ExitCode}, stdout='{output.Substring(0, Math.Min(100, output.Length))}', stderr='{error.Substring(0, Math.Min(100, error.Length))}'");
+                    Debug.WriteLine($"[ADB] {effectiveArguments} => exit={process.ExitCode}, stdout='{output.Substring(0, Math.Min(100, output.Length))}', stderr='{error.Substring(0, Math.Min(100, error.Length))}'");
                     return (output, error);
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[ADB] 执行失败: {arguments} => {ex.Message}");
+                    Debug.WriteLine($"[ADB] 执行失败: {effectiveArguments} => {ex.Message}");
                     return ("", ex.Message);
                 }
             });
@@ -854,26 +1088,90 @@ namespace AndroidConnectUI
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.ChangedButton == MouseButton.Left)
+            if (e.ChangedButton != MouseButton.Left)
+                return;
+
+            if (e.ClickCount == 2 && ResizeMode == ResizeMode.CanResizeWithGrip)
+            {
+                ToggleMaximize();
+                return;
+            }
+
+            if (WindowState == WindowState.Maximized)
+            {
+                Point mousePosition = e.GetPosition(this);
+                double horizontalRatio = mousePosition.X / ActualWidth;
+                SystemCommands.RestoreWindow(this);
+                Left = e.GetPosition(null).X - RestoreBounds.Width * horizontalRatio;
+                Top = Math.Max(0, e.GetPosition(null).Y - 24);
+            }
+
+            if (e.ButtonState == MouseButtonState.Pressed)
                 DragMove();
         }
 
         private void btnMinimize_Click(object sender, RoutedEventArgs e)
         {
-            WindowState = WindowState.Minimized;
+            SystemCommands.MinimizeWindow(this);
+        }
+
+        private void btnMaximize_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleMaximize();
+        }
+
+        private void ToggleMaximize()
+        {
+            if (WindowState == WindowState.Maximized)
+                SystemCommands.RestoreWindow(this);
+            else
+                SystemCommands.MaximizeWindow(this);
+        }
+
+        private void MainWindow_StateChanged(object? sender, EventArgs e)
+        {
+            if (!IsInitialized)
+                return;
+
+            bool maximized = WindowState == WindowState.Maximized;
+            btnMaximize.Content = maximized ? "\uE923" : "\uE922";
+            btnMaximize.ToolTip = maximized ? "还原" : "最大化";
+            WindowBorder.CornerRadius = maximized ? new CornerRadius(0) : new CornerRadius(18);
+            ApplyDwmWindowAppearance();
         }
 
         private void btnClose_Click(object sender, RoutedEventArgs e)
         {
-            _monitorTimer.Stop();
-            Application.Current.Shutdown();
+            _monitorTimer?.Stop();
+            SystemCommands.CloseWindow(this);
         }
 
-        private void btnSettings_Click(object sender, RoutedEventArgs e)
+        private async void btnSettings_Click(object sender, RoutedEventArgs e)
         {
-            var settingsWindow = new SettingsWindow();
+            await OpenSleepSettingsAsync();
+        }
+
+        private async void btnSleepSettings_Click(object sender, RoutedEventArgs e)
+        {
+            await OpenSleepSettingsAsync();
+        }
+
+        private async Task OpenSleepSettingsAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_selectedDeviceSerial))
+            {
+                MessageBox.Show("请先选择一台已连接的 ADB 设备。", "未选择设备",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var settingsWindow = new SettingsWindow(ToolManager.AdbPath, _selectedDeviceSerial);
             settingsWindow.Owner = this;
-            settingsWindow.ShowDialog();
+            if (settingsWindow.ShowDialog() == true)
+            {
+                _refreshCounter = 9;
+                await RefreshAllAsync(CancellationToken.None);
+            }
         }
 
         private async void btnWirelessAdb_Click(object sender, RoutedEventArgs e)
@@ -982,8 +1280,8 @@ namespace AndroidConnectUI
                 Debug.WriteLine("正在启动 scrcpy 并关闭屏幕...");
                 var scrcpyStartInfo = new ProcessStartInfo
                 {
-                    FileName = "scrcpy",
-                    Arguments = "--turn-screen-off --stay-awake",
+                    FileName = ToolManager.ScrcpyPath,
+                    Arguments = $"--serial=\"{_selectedDeviceSerial}\" --turn-screen-off --stay-awake",
                     UseShellExecute = true,
                     CreateNoWindow = false
                 };
@@ -995,7 +1293,7 @@ namespace AndroidConnectUI
             catch (Exception ex)
             {
                 Debug.WriteLine($"启动失败: {ex.Message}");
-                MessageBox.Show($"启动失败: {ex.Message}\n\n请确保已安装 scrcpy 并将其添加到系统 PATH 中。",
+                MessageBox.Show($"启动失败: {ex.Message}\n\n请检查网络连接，或确认本地 ADB 与 scrcpy 工具完整。",
                     "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
@@ -1314,5 +1612,28 @@ namespace AndroidConnectUI
     {
         public string Name { get; set; } = "";
         public string PackageName { get; set; } = "";
+    }
+
+    public sealed class AdbDeviceInfo
+    {
+        public AdbDeviceInfo(string serial, string state, string? model)
+        {
+            Serial = serial;
+            State = state;
+            Model = model;
+
+            string identity = string.IsNullOrWhiteSpace(serial)
+                ? model ?? "ADB"
+                : string.IsNullOrWhiteSpace(model) ? serial : $"{model} · {serial}";
+            DisplayName = IsOnline ? identity : $"{identity} ({state})";
+        }
+
+        public string Serial { get; }
+        public string State { get; }
+        public string? Model { get; }
+        public string DisplayName { get; }
+        public bool IsOnline => State.Equals("device", StringComparison.OrdinalIgnoreCase);
+
+        public static AdbDeviceInfo Placeholder(string text) => new("", "未连接", text);
     }
 }
